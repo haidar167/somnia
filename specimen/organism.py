@@ -95,6 +95,11 @@ class SpecimenOrganism:
         self.event_log: collections.deque = collections.deque(maxlen=200)
         self.recent_dreams: List[Dict[str, Any]] = []
 
+        # Feed Debounce & Spam Prevention
+        self.last_feed_time: float = 0.0
+        self.last_feed_bytes: bytes = b""
+        self.last_feed_visitor: Optional[str] = None
+
         # Load persisted history from DB
         self._load_from_storage()
         self.log_event("Organism awakened. State restored from persistent substrate.", "system")
@@ -187,9 +192,39 @@ class SpecimenOrganism:
         })
         self.storage.log_event(timestamp, message, event_type)
 
+    def get_diversity_guarded_memory(self) -> List[Dict[str, Any]]:
+        """Filter memory buffer capping bursts of near-identical feeds (same pred & round(p_err, 2) within 1s) to max 5 retained."""
+        guarded: List[Dict[str, Any]] = []
+        for mem in self.memory_buffer:
+            sig = (mem.get("pred"), round(mem.get("p_error", 0.0), 2))
+            t = mem.get("timestamp", 0.0)
+            recent_matches = [
+                m for m in guarded
+                if (m.get("pred"), round(m.get("p_error", 0.0), 2)) == sig and abs(m.get("timestamp", 0.0) - t) <= 1.0
+            ]
+            if len(recent_matches) < 5:
+                guarded.append(mem)
+        return guarded
+
     def feed(self, img_28x28: np.ndarray, visitor_id: Optional[str] = None) -> Dict[str, Any]:
         """Feed a 28x28 image into the organism, classifying and sensing internal confusion."""
+        now = time.time()
         x_flat = np.clip(img_28x28.reshape(-1, 784), 0.0, 1.0).astype(np.float32)
+        raw_bytes = x_flat.tobytes()
+
+        # Debounce: reject duplicate image within 300ms from the same visitor/caller
+        if (now - self.last_feed_time < 0.300) and (raw_bytes == self.last_feed_bytes) and (visitor_id == self.last_feed_visitor):
+            self.log_event("FEED rejected: duplicate within 300ms.", "warning")
+            return {
+                "status": "rejected",
+                "reason": "duplicate_within_300ms",
+                "message": "FEED rejected: duplicate within 300ms."
+            }
+
+        self.last_feed_time = now
+        self.last_feed_bytes = raw_bytes
+        self.last_feed_visitor = visitor_id
+
         x_tensor = torch.from_numpy(x_flat)
 
         self.classifier.eval()
@@ -243,7 +278,7 @@ class SpecimenOrganism:
         self.current_disagreement = disagreement
         self.disagreement_note = disagreement_note
 
-        # Store in memory buffer & SQLite
+        # Store in memory buffer with diversity guard & SQLite
         memory_item = {
             "id": self.total_feeds,
             "image": x_flat[0].tolist(),
@@ -252,10 +287,17 @@ class SpecimenOrganism:
             "conf": conf,
             "p_error": p_err,
             "true_label": None,
-            "timestamp": time.time(),
+            "timestamp": now,
         }
-        self.memory_buffer.append(memory_item)
-        self.storage.add_memory(self.total_feeds, x_flat[0].tolist(), b64_thumb, pred, conf, p_err)
+
+        sig = (pred, round(p_err, 2))
+        recent_matches = [
+            m for m in self.memory_buffer
+            if (m.get("pred"), round(m.get("p_error", 0.0), 2)) == sig and abs(now - m.get("timestamp", 0.0)) <= 1.0
+        ]
+        if len(recent_matches) < 5:
+            self.memory_buffer.append(memory_item)
+            self.storage.add_memory(self.total_feeds, x_flat[0].tolist(), b64_thumb, pred, conf, p_err)
 
         # Track anonymous visitor history
         visitor_info = None
@@ -338,9 +380,11 @@ class SpecimenOrganism:
         self.log_event(f"SLEEP #{self.sleep_count}: Entering dream consolidation...", "sleep")
 
         try:
-            # Profile confusion from memory buffer or fallback
-            if len(self.memory_buffer) >= 10:
-                mem_x = torch.from_numpy(np.array([m["image"] for m in list(self.memory_buffer)[-200:]]))
+            guarded_mems = self.get_diversity_guarded_memory()
+
+            # Profile confusion from diversity-guarded memory buffer or fallback
+            if len(guarded_mems) >= 10:
+                mem_x = torch.from_numpy(np.array([m["image"] for m in guarded_mems[-200:]], dtype=np.float32))
                 class_conf = self.dreamer.get_class_confusion_profile(mem_x)
             else:
                 class_conf = torch.full((10,), 0.2)
@@ -354,31 +398,55 @@ class SpecimenOrganism:
             # Replay with small real batch if available
             real_x = torch.randn(50, 784).clamp(0, 1)
             real_y = torch.randint(0, 10, (50,))
-            if len(self.memory_buffer) >= 10:
-                sample_mem = list(self.memory_buffer)[-50:]
-                real_x = torch.from_numpy(np.array([m["image"] for m in sample_mem]))
-                real_y = torch.tensor([m["pred"] if m["true_label"] is None else m["true_label"] for m in sample_mem])
+            if len(guarded_mems) >= 10:
+                sample_mem = guarded_mems[-50:]
+                real_x = torch.from_numpy(np.array([m["image"] for m in sample_mem], dtype=np.float32))
+                real_y = torch.tensor([m["pred"] if m["true_label"] is None else m["true_label"] for m in sample_mem], dtype=torch.long)
 
             self.consolidator.sleep_cycle(real_x, real_y, raw_dreams, pseudo_y, weights)
 
-            # Store recent 8 dreams with confusion badges in DB
+            # Evaluate dreams with classifier and introspective head for realistic telemetry
+            with torch.no_grad():
+                d_logits, d_h = self.classifier(raw_dreams)
+                d_preds = d_logits.argmax(dim=1)
+                d_stats = extract_internal_stats_v2(d_h, d_logits)
+                d_p_errs = self.intro_head(d_stats).squeeze()
+
+            # Pick 8 diverse dreams across classes
+            unique_classes = torch.unique(dream_labels)
+            chosen_indices = []
+            for c in unique_classes:
+                idx = (dream_labels == c).nonzero(as_tuple=True)[0]
+                if len(idx) > 0:
+                    chosen_indices.append(idx[0].item())
+                if len(chosen_indices) == 8:
+                    break
+            if len(chosen_indices) < 8:
+                for i in range(len(raw_dreams)):
+                    if i not in chosen_indices:
+                        chosen_indices.append(i)
+                    if len(chosen_indices) == 8:
+                        break
+
             new_dreams = []
-            for i in range(min(8, len(raw_dreams))):
-                d_img = raw_dreams[i].numpy()
+            for idx in chosen_indices:
+                d_img = raw_dreams[idx].numpy()
                 b64 = image_to_base64(d_img)
-                p_err = 1.0 - weights[i].item()
+                pe = float(d_p_errs[idx].item()) if d_p_errs.ndim > 0 else float(d_p_errs.item())
+                w = float(weights[idx].item())
+                is_nightmare = bool(pe >= 0.25 or w < 0.80)
                 new_dreams.append({
                     "b64": b64,
-                    "target_class": int(dream_labels[i].item()),
-                    "pseudo_label": int(pseudo_y[i].item()),
-                    "weight": float(weights[i].item()),
-                    "p_error": float(p_err),
-                    "is_nightmare": bool(weights[i].item() < 0.80),
+                    "target_class": int(dream_labels[idx].item()),
+                    "pseudo_label": int(d_preds[idx].item()),
+                    "weight": w,
+                    "p_error": pe,
+                    "is_nightmare": is_nightmare,
                 })
             self.recent_dreams = new_dreams
             self.storage.save_dreams(new_dreams)
 
-            post_conf = float(np.mean([m["p_error"] for m in self.memory_buffer])) if len(self.memory_buffer) > 0 else 0.05
+            post_conf = float(np.mean([m["p_error"] for m in guarded_mems])) if len(guarded_mems) > 0 else 0.05
             self.log_event(
                 f"SLEEP #{self.sleep_count} COMPLETE: Consolidated 200 targeted dreams. Mean memory confusion: {post_conf*100:.1f}%. Awake.",
                 "sleep"
@@ -395,19 +463,27 @@ class SpecimenOrganism:
 
     def _bootstrap_initial_dreams(self):
         """Generate initial dream feed on first boot and save to DB."""
-        raw_dreams, dream_labels = self.dreamer.generate_random_dreams(n=8, seed=42)
+        raw_dreams, dream_labels = self.dreamer.generate_random_dreams(n=16, seed=42)
         pseudo_y, weights = self.stability.compute_soft_weights(raw_dreams, seed=42)
-        self.recent_dreams = [
-            {
+        with torch.no_grad():
+            d_logits, d_h = self.classifier(raw_dreams)
+            d_preds = d_logits.argmax(dim=1)
+            d_stats = extract_internal_stats_v2(d_h, d_logits)
+            d_p_errs = self.intro_head(d_stats).squeeze()
+
+        self.recent_dreams = []
+        for i in range(min(8, len(raw_dreams))):
+            pe = float(d_p_errs[i].item()) if d_p_errs.ndim > 0 else float(d_p_errs.item())
+            w = float(weights[i].item())
+            is_nightmare = bool(pe >= 0.25 or w < 0.80)
+            self.recent_dreams.append({
                 "b64": image_to_base64(raw_dreams[i].numpy()),
                 "target_class": int(dream_labels[i].item()),
-                "pseudo_label": int(pseudo_y[i].item()),
-                "weight": float(weights[i].item()),
-                "p_error": float(1.0 - weights[i].item()),
-                "is_nightmare": bool(weights[i].item() < 0.80),
-            }
-            for i in range(8)
-        ]
+                "pseudo_label": int(d_preds[i].item()),
+                "weight": w,
+                "p_error": pe,
+                "is_nightmare": is_nightmare,
+            })
         self.storage.save_dreams(self.recent_dreams)
 
     def get_state(self) -> Dict[str, Any]:

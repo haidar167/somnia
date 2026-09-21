@@ -12,8 +12,9 @@ from specimen.server import app, organism
 
 
 @pytest.fixture
-def test_organism():
-    return SpecimenOrganism()
+def test_organism(tmp_path):
+    db_file = tmp_path / "test_specimen.db"
+    return SpecimenOrganism(db_path=str(db_file))
 
 
 @pytest.fixture
@@ -59,7 +60,8 @@ class TestSpecimenOrganism:
         assert rev_correct["was_correct"] is True
 
         # Feed another and reveal wrong label
-        feed_res2 = test_organism.feed(img)
+        img2 = np.random.rand(28, 28).astype(np.float32)
+        feed_res2 = test_organism.feed(img2)
         wrong_label = (feed_res2["prediction"] + 1) % 10
         rev_wrong = test_organism.reveal(wrong_label)
         assert rev_wrong["was_correct"] is False

@@ -13,22 +13,28 @@
 ## 🧠 THE SPECIMEN: A Living AI Organism on the Web
 
 <p align="center">
-  <img src="figures/specimen_disagreement.png" alt="The Disagreement Moment" width="700"/>
+  <img src="figures/specimen_demo.gif" alt="The Specimen Live Telemetry Stream" width="720"/>
 </p>
 
-The biological culmination of this entire series is **THE SPECIMEN** — a standalone, real-time web application where visitors can observe the living artificial organism, feed it custom drawn digits, watch its internal brainwaves oscillate, witness the dramatic moment when **its mouth and gut disagree**, and watch it enter dream consolidation.
+The biological culmination of this entire series is **THE SPECIMEN** — a standalone, real-time web application where visitors observe a living artificial organism, feed it custom drawn digits, watch its internal brainwaves oscillate, witness the dramatic moment when **its mouth and gut disagree**, and watch it enter dream consolidation.
 
-### Key Capabilities:
-1. **Real-Time Somatosensory Telemetry**: Live WebSocket broadcast of 10 internal activation statistics and brainwave channels.
-2. **The Disagreement Moment**: When softmax confidence is high but introspective $P(\text{error})$ sounds the alarm, the console highlights the internal cognitive dissonance.
-3. **Interactive Confession & Truth Reveal**: Feed ambiguous samples, reveal the ground truth, and watch the organism confess its internal doubt.
-4. **Subconscious Dream Feed**: Watch targeted dreams generated and consolidated live.
+### What You Experience in the First 30 Seconds:
+1. **Real-Time Somatosensory Telemetry**: Live WebSocket broadcast of 10 internal activation statistics and 4-channel brainwaves streaming at 2 Hz without touching a button.
+2. **The Disagreement Moment**: Draw an ambiguous digit. When nominal Softmax confidence is high but introspective $P(\text{error})$ sounds the alarm, the console highlights the internal cognitive dissonance.
+3. **Interactive Confession & Truth Reveal**: Confirm the ground truth, and watch the organism confess its internal doubt into the live terminal.
+4. **Subconscious Dream Feed & Persistence**: Watch targeted dreams generated and consolidated. The organism persists state to SQLite, remembering returning visitors anonymously across restarts.
 
+### Running & Deploying:
 ```bash
-# Run The Specimen Web Organism locally
-python -m uvicorn specimen.server:app --reload --port 8000
+# 1. Local Run
+python -m uvicorn specimen.server:app --port 8000
 # Open http://localhost:8000
+
+# 2. Free 24/7 Cloud Deployment (Render / Docker)
+# See DEPLOY.md for complete click-by-click instructions.
 ```
+
+> **Privacy & Cloud Notes**: Visitor memory uses anonymous local UUIDs (`mind_xxxx`). No IPs or personal data are collected. On free-tier cloud instances, the organism enters low-power sleep after 15 minutes of idle time.
 
 ---
 
