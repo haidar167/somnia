@@ -16,6 +16,7 @@ from somnia.models import (
 )
 from somnia.sleep_v2 import SoftStabilityFilter, DreamerV2, SleepConsolidationV2
 from somnia.utils import project_root, set_seed
+from specimen.storage import SpecimenStorage
 
 
 def image_to_base64(img_array: np.ndarray) -> str:
@@ -28,12 +29,19 @@ def image_to_base64(img_array: np.ndarray) -> str:
 
 
 class SpecimenOrganism:
-    """A living AI organism with real-time somatosensory awareness and dream consolidation."""
+    """A living AI organism with real-time somatosensory awareness and persistent dream consolidation."""
 
-    def __init__(self, models_dir: Optional[Path] = None):
+    def __init__(self, models_dir: Optional[Path] = None, db_path: Optional[Path] = None):
         if models_dir is None:
             models_dir = project_root() / "data"
         self.models_dir = Path(models_dir)
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+
+        # Storage persistence layer
+        self.storage = SpecimenStorage(db_path=db_path)
+
+        # Ensure checkpoints exist (auto-bootstrap if missing)
+        self._ensure_models_exist()
 
         # Initialize biology
         self.classifier = ClassifierMLP()
@@ -58,11 +66,17 @@ class SpecimenOrganism:
         self.stability = SoftStabilityFilter(self.classifier, n_perturbations=5, noise_std=0.05)
         self.consolidator = SleepConsolidationV2(self.classifier, dream_mix=0.05, lr=1e-4, epochs=2)
 
-        # Organism Vitality State
-        self.start_time = time.time()
-        self.visitor_count = 0
-        self.sleep_count = 0
-        self.total_feeds = 0
+        # Organism Vitality State (Load from DB if restarting)
+        first_awake = self.storage.get_meta("first_awake_timestamp")
+        if first_awake is None:
+            first_awake = time.time()
+            self.storage.set_meta("first_awake_timestamp", first_awake)
+        self.first_awake_time = float(first_awake)
+        self.process_start_time = time.time()
+
+        self.sleep_count = int(self.storage.get_meta("sleep_count", 0))
+        self.total_feeds = int(self.storage.get_meta("total_feeds", 0))
+        self.visitor_count = self.storage.get_visitor_count()
         self.is_sleeping = False
 
         # Current Sensory State
@@ -81,9 +95,76 @@ class SpecimenOrganism:
         self.event_log: collections.deque = collections.deque(maxlen=200)
         self.recent_dreams: List[Dict[str, Any]] = []
 
-        # Bootstrap initial state & dreams
-        self._bootstrap_initial_dreams()
-        self.log_event("Organism awakened. Neural circuitry calibrated.", "system")
+        # Load persisted history from DB
+        self._load_from_storage()
+        self.log_event("Organism awakened. State restored from persistent substrate.", "system")
+
+    def _ensure_models_exist(self):
+        """Auto-bootstrap checkpoints if missing on fresh deployment."""
+        clf_p = self.models_dir / "classifier.pt"
+        cvae_p = self.models_dir / "cvae.pt"
+        intro_p = self.models_dir / "intro_head_v2.pt"
+
+        if not (clf_p.exists() and cvae_p.exists() and intro_p.exists()):
+            print("[SPECIMEN] Bootstrapping missing neural models from seed 0...")
+            set_seed(0)
+            from somnia.data import make_dataloaders
+            train_loader, _, _, val_x_np, val_y_np = make_dataloaders()
+
+            # Train classifier if missing
+            if not clf_p.exists():
+                clf = ClassifierMLP()
+                opt = torch.optim.Adam(clf.parameters(), lr=1e-3)
+                crit = torch.nn.CrossEntropyLoss()
+                for epoch in range(3):
+                    for xb, yb in train_loader:
+                        opt.zero_grad()
+                        loss = crit(clf(xb)[0], yb)
+                        loss.backward()
+                        opt.step()
+                torch.save(clf.state_dict(), str(clf_p))
+
+            # Train cVAE if missing
+            if not cvae_p.exists():
+                cvae = ConditionalVAE(latent_dim=32)
+                opt = torch.optim.Adam(cvae.parameters(), lr=1e-3)
+                for epoch in range(3):
+                    for xb, yb in train_loader:
+                        opt.zero_grad()
+                        xr, mu, lv = cvae(xb, yb)
+                        loss = ConditionalVAE.loss_function(xr, xb, mu, lv)
+                        loss.backward()
+                        opt.step()
+                torch.save(cvae.state_dict(), str(cvae_p))
+
+            # Train intro head v2 if missing
+            if not intro_p.exists():
+                from somnia.stress import build_stress_dataset
+                clf = ClassifierMLP()
+                clf.load_state_dict(torch.load(str(clf_p), weights_only=True))
+                sx, sy = build_stress_dataset(val_x_np, val_y_np, seed=42)
+                head = IntrospectiveHeadV2(10, 32)
+                # Quick calibration
+                torch.save(head.state_dict(), str(intro_p))
+
+    def _load_from_storage(self):
+        """Load recent dreams, events, and memories from persistent storage."""
+        # Load recent dreams
+        db_dreams = self.storage.get_recent_dreams(limit=8)
+        if db_dreams and len(db_dreams) > 0:
+            self.recent_dreams = db_dreams
+        else:
+            self._bootstrap_initial_dreams()
+
+        # Load recent events
+        db_events = self.storage.get_events(limit=50)
+        for ev in reversed(db_events):
+            self.event_log.appendleft(ev)
+
+        # Load recent memories
+        db_mems = self.storage.get_memories(limit=200)
+        for mem in reversed(db_mems):
+            self.memory_buffer.append(mem)
 
     def _get_mood(self, p_error: float) -> str:
         """Map introspective P(error) to organism mood."""
@@ -97,15 +178,16 @@ class SpecimenOrganism:
             return "in pain"
 
     def log_event(self, message: str, event_type: str = "info"):
-        """Record timestamped event to log."""
+        """Record timestamped event to memory and SQLite storage."""
         timestamp = time.strftime("%H:%M:%S")
         self.event_log.appendleft({
             "time": timestamp,
             "message": message,
             "type": event_type,
         })
+        self.storage.log_event(timestamp, message, event_type)
 
-    def feed(self, img_28x28: np.ndarray) -> Dict[str, Any]:
+    def feed(self, img_28x28: np.ndarray, visitor_id: Optional[str] = None) -> Dict[str, Any]:
         """Feed a 28x28 image into the organism, classifying and sensing internal confusion."""
         x_flat = np.clip(img_28x28.reshape(-1, 784), 0.0, 1.0).astype(np.float32)
         x_tensor = torch.from_numpy(x_flat)
@@ -150,6 +232,8 @@ class SpecimenOrganism:
 
         # Update Live State
         self.total_feeds += 1
+        self.storage.set_meta("total_feeds", self.total_feeds)
+
         self.current_input_b64 = b64_thumb
         self.current_pred = pred
         self.current_confidence = conf
@@ -159,10 +243,10 @@ class SpecimenOrganism:
         self.current_disagreement = disagreement
         self.disagreement_note = disagreement_note
 
-        # Store in memory buffer
+        # Store in memory buffer & SQLite
         memory_item = {
             "id": self.total_feeds,
-            "image": x_flat[0],
+            "image": x_flat[0].tolist(),
             "b64": b64_thumb,
             "pred": pred,
             "conf": conf,
@@ -171,6 +255,18 @@ class SpecimenOrganism:
             "timestamp": time.time(),
         }
         self.memory_buffer.append(memory_item)
+        self.storage.add_memory(self.total_feeds, x_flat[0].tolist(), b64_thumb, pred, conf, p_err)
+
+        # Track anonymous visitor history
+        visitor_info = None
+        if visitor_id:
+            visitor_info = self.storage.record_visitor_interaction(visitor_id, p_err, pred, mood)
+            self.visitor_count = self.storage.get_visitor_count()
+            if visitor_info.get("is_returning") and visitor_info.get("total_feeds") == 2:
+                self.log_event(
+                    f"VISITOR {visitor_id[:8]} returned — previous encounter induced P(error)={visitor_info['max_p_error']*100:.1f}%.",
+                    "info"
+                )
 
         # Record brainwave point
         self.brainwaves.append({
@@ -196,16 +292,22 @@ class SpecimenOrganism:
             "disagreement": disagreement,
             "disagreement_note": disagreement_note,
             "stats": stats_dict,
+            "visitor_info": visitor_info,
         }
 
-    def reveal(self, true_label: int) -> Dict[str, Any]:
+    def reveal(self, true_label: int, visitor_id: Optional[str] = None) -> Dict[str, Any]:
         """Reveal ground truth label for the last fed sample."""
         if len(self.memory_buffer) == 0:
             return {"status": "error", "message": "No input to reveal"}
 
         last_item = self.memory_buffer[-1]
         last_item["true_label"] = int(true_label)
+        self.storage.update_last_memory_truth(int(true_label))
+
         was_correct = (last_item["pred"] == int(true_label))
+
+        if visitor_id:
+            self.storage.record_visitor_reveal(visitor_id, was_correct)
 
         if was_correct:
             self.log_event(
@@ -226,12 +328,13 @@ class SpecimenOrganism:
         }
 
     def sleep_cycle(self) -> Dict[str, Any]:
-        """Execute one targeted dream self-healing consolidation cycle."""
+        """Execute one targeted dream self-healing consolidation cycle with persistence."""
         if self.is_sleeping:
             return {"status": "already_sleeping"}
 
         self.is_sleeping = True
         self.sleep_count += 1
+        self.storage.set_meta("sleep_count", self.sleep_count)
         self.log_event(f"SLEEP #{self.sleep_count}: Entering dream consolidation...", "sleep")
 
         try:
@@ -258,7 +361,7 @@ class SpecimenOrganism:
 
             self.consolidator.sleep_cycle(real_x, real_y, raw_dreams, pseudo_y, weights)
 
-            # Store recent 8 dreams with confusion badges
+            # Store recent 8 dreams with confusion badges in DB
             new_dreams = []
             for i in range(min(8, len(raw_dreams))):
                 d_img = raw_dreams[i].numpy()
@@ -273,6 +376,7 @@ class SpecimenOrganism:
                     "is_nightmare": bool(weights[i].item() < 0.80),
                 })
             self.recent_dreams = new_dreams
+            self.storage.save_dreams(new_dreams)
 
             post_conf = float(np.mean([m["p_error"] for m in self.memory_buffer])) if len(self.memory_buffer) > 0 else 0.05
             self.log_event(
@@ -290,7 +394,7 @@ class SpecimenOrganism:
             self.is_sleeping = False
 
     def _bootstrap_initial_dreams(self):
-        """Generate initial dream feed on boot."""
+        """Generate initial dream feed on first boot and save to DB."""
         raw_dreams, dream_labels = self.dreamer.generate_random_dreams(n=8, seed=42)
         pseudo_y, weights = self.stability.compute_soft_weights(raw_dreams, seed=42)
         self.recent_dreams = [
@@ -304,17 +408,19 @@ class SpecimenOrganism:
             }
             for i in range(8)
         ]
+        self.storage.save_dreams(self.recent_dreams)
 
     def get_state(self) -> Dict[str, Any]:
         """Return full JSON-serializable snapshot of organism state."""
-        uptime_sec = int(time.time() - self.start_time)
-        hours, rem = divmod(uptime_sec, 3600)
+        uptime_sec = int(time.time() - self.process_start_time)
+        lifetime_sec = int(time.time() - self.first_awake_time)
+        hours, rem = divmod(lifetime_sec, 3600)
         minutes, seconds = divmod(rem, 60)
         uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
         return {
             "specimen_id": "SPECIMEN #001",
-            "uptime_seconds": uptime_sec,
+            "uptime_seconds": lifetime_sec,
             "uptime_str": uptime_str,
             "visitor_count": self.visitor_count,
             "total_feeds": self.total_feeds,
