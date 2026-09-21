@@ -227,6 +227,9 @@ function updateUI(state) {
   document.getElementById('uptime-display').innerText = state.uptime_str || '00:00:00';
   document.getElementById('sleep-count-display').innerText = state.sleep_count || 0;
   document.getElementById('feed-count-display').innerText = state.total_feeds || 0;
+  if (document.getElementById('taught-count-display')) {
+    document.getElementById('taught-count-display').innerText = state.taught_count || 0;
+  }
   document.getElementById('visitor-count-display').innerText = state.visitor_count || 1;
   document.getElementById('vital-status').innerText = state.is_sleeping ? 'SLEEPING (DREAMING)' : 'ALIVE';
   document.getElementById('vital-status').style.color = state.is_sleeping ? '#A78BFA' : '#00FF9D';
@@ -274,7 +277,7 @@ function updateUI(state) {
       <div class="dream-card">
         <img src="${d.b64}" alt="Dream">
         <span class="dream-badge ${d.is_nightmare ? 'badge-nightmare' : 'badge-lucid'}">
-          ${d.is_nightmare ? 'NIGHTMARE' : 'LUCID'} [${d.target_class}]
+          ${d.is_nightmare ? 'NIGHTMARE' : 'LUCID'} [${d.target_class}] (${((d.p_error || 0) * 100).toFixed(0)}%)
         </span>
       </div>
     `).join('');

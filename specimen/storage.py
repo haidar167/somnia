@@ -98,6 +98,20 @@ class SpecimenStorage:
                     timestamp REAL
                 )
             """)
+
+            # Taught memories table (The Exchange)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS taught_memories (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    image_json TEXT,
+                    true_label INTEGER,
+                    what_the_organism_said INTEGER,
+                    p_error_at_feed REAL,
+                    visitor_id TEXT,
+                    was_correct INTEGER,
+                    timestamp REAL
+                )
+            """)
             conn.commit()
 
     # Metadata operations
@@ -235,6 +249,47 @@ class SpecimenStorage:
                 for r in rows
             ]
 
+    # Taught memory operations (The Exchange)
+    def add_taught_memory(self, image_flat: List[float], true_label: int,
+                          what_the_organism_said: int, p_error_at_feed: float,
+                          visitor_id: str, was_correct: bool):
+        now = time.time()
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                INSERT INTO taught_memories (image_json, true_label, what_the_organism_said, p_error_at_feed, visitor_id, was_correct, timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (json.dumps(image_flat), true_label, what_the_organism_said, p_error_at_feed, visitor_id, 1 if was_correct else 0, now))
+            conn.commit()
+
+    def get_taught_memories(self, limit: int = 500) -> List[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT id, image_json, true_label, what_the_organism_said, p_error_at_feed, visitor_id, was_correct, timestamp
+                FROM taught_memories ORDER BY id DESC LIMIT ?
+            """, (limit,))
+            rows = cur.fetchall()
+            return [
+                {
+                    "id": r["id"],
+                    "image": json.loads(r["image_json"]),
+                    "true_label": r["true_label"],
+                    "what_the_organism_said": r["what_the_organism_said"],
+                    "p_error": r["p_error_at_feed"],
+                    "visitor_id": r["visitor_id"],
+                    "was_correct": bool(r["was_correct"]),
+                    "timestamp": r["timestamp"],
+                }
+                for r in rows
+            ]
+
+    def get_taught_count(self) -> int:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) as count FROM taught_memories")
+            return cur.fetchone()["count"]
+
     # Visitor memory operations
     def record_visitor_interaction(self, visitor_id: str, p_error: float, pred: int, mood: str) -> Dict[str, Any]:
         """Record or update visitor profile and return their history."""
@@ -257,6 +312,8 @@ class SpecimenStorage:
                     "max_p_error": p_error,
                     "previous_mood": mood,
                     "previous_pred": pred,
+                    "taught_count": 0,
+                    "fooled_count": 0,
                 }
             else:
                 # Returning visitor
@@ -264,6 +321,8 @@ class SpecimenStorage:
                 max_p = max(row["max_p_error"], p_error)
                 prev_pred = row["last_pred"]
                 prev_mood = row["last_mood"]
+                total_rev = row["total_reveals"]
+                corr_rev = row["correct_reveals"]
 
                 cur.execute("""
                     UPDATE visitors
@@ -278,6 +337,8 @@ class SpecimenStorage:
                     "max_p_error": max_p,
                     "previous_mood": prev_mood,
                     "previous_pred": prev_pred,
+                    "taught_count": total_rev,
+                    "fooled_count": total_rev - corr_rev,
                 }
 
     def record_visitor_reveal(self, visitor_id: str, was_correct: bool):
@@ -290,6 +351,26 @@ class SpecimenStorage:
                 WHERE visitor_id = ?
             """, (1 if was_correct else 0, visitor_id))
             conn.commit()
+
+    def get_visitor_profile(self, visitor_id: str) -> Optional[Dict[str, Any]]:
+        with self._get_conn() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM visitors WHERE visitor_id = ?", (visitor_id,))
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return {
+                "visitor_id": row["visitor_id"],
+                "first_seen": row["first_seen"],
+                "last_seen": row["last_seen"],
+                "total_feeds": row["total_feeds"],
+                "total_reveals": row["total_reveals"],
+                "correct_reveals": row["correct_reveals"],
+                "fooled_count": row["total_reveals"] - row["correct_reveals"],
+                "max_p_error": row["max_p_error"],
+                "last_pred": row["last_pred"],
+                "last_mood": row["last_mood"],
+            }
 
     def get_visitor_count(self) -> int:
         with self._get_conn() as conn:

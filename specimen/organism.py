@@ -92,6 +92,7 @@ class SpecimenOrganism:
         # Historical Memory & Telemetry
         self.brainwaves: collections.deque = collections.deque(maxlen=60)
         self.memory_buffer: collections.deque = collections.deque(maxlen=2000)
+        self.taught_buffer: collections.deque = collections.deque(maxlen=500)
         self.event_log: collections.deque = collections.deque(maxlen=200)
         self.recent_dreams: List[Dict[str, Any]] = []
 
@@ -170,6 +171,11 @@ class SpecimenOrganism:
         db_mems = self.storage.get_memories(limit=200)
         for mem in reversed(db_mems):
             self.memory_buffer.append(mem)
+
+        # Load taught memories (The Exchange)
+        db_taught = self.storage.get_taught_memories(limit=500)
+        for tmem in reversed(db_taught):
+            self.taught_buffer.append(tmem)
 
     def _get_mood(self, p_error: float) -> str:
         """Map introspective P(error) to organism mood."""
@@ -338,7 +344,7 @@ class SpecimenOrganism:
         }
 
     def reveal(self, true_label: int, visitor_id: Optional[str] = None) -> Dict[str, Any]:
-        """Reveal ground truth label for the last fed sample."""
+        """Reveal ground truth label for the last fed sample and store in taught buffer."""
         if len(self.memory_buffer) == 0:
             return {"status": "error", "message": "No input to reveal"}
 
@@ -351,22 +357,39 @@ class SpecimenOrganism:
         if visitor_id:
             self.storage.record_visitor_reveal(visitor_id, was_correct)
 
-        if was_correct:
-            self.log_event(
-                f"REVEAL: Confirmed correct! Label is {true_label}. (I felt P(error)={last_item['p_error']*100:.1f}%).",
-                "success"
-            )
-        else:
-            self.log_event(
-                f"REVEAL: I was WRONG. Said {last_item['pred']}, but true label is {true_label}. I felt P(error)={last_item['p_error']*100:.1f}% BEFORE I knew!",
-                "error"
-            )
+        # Store in taught memory buffer & DB (The Exchange)
+        v_id_str = visitor_id if visitor_id else "anonymous"
+        taught_entry = {
+            "image": list(last_item["image"]),
+            "true_label": int(true_label),
+            "what_the_organism_said": int(last_item["pred"]),
+            "p_error": float(last_item["p_error"]),
+            "visitor_id": v_id_str,
+            "was_correct": was_correct,
+            "timestamp": time.time(),
+        }
+        self.taught_buffer.append(taught_entry)
+        self.storage.add_taught_memory(
+            last_item["image"],
+            int(true_label),
+            int(last_item["pred"]),
+            float(last_item["p_error"]),
+            v_id_str,
+            was_correct
+        )
+
+        p_err_pct = last_item["p_error"] * 100.0
+        self.log_event(
+            f"visitor taught me: this was a {true_label} (I said {last_item['pred']}, felt P(error)={p_err_pct:.1f}%). I will dream about it.",
+            "taught"
+        )
 
         return {
             "predicted": last_item["pred"],
             "true_label": true_label,
             "was_correct": was_correct,
             "p_error_before": last_item["p_error"],
+            "taught_count": len(self.taught_buffer),
         }
 
     def sleep_cycle(self) -> Dict[str, Any]:
@@ -516,4 +539,5 @@ class SpecimenOrganism:
             "recent_dreams": self.recent_dreams,
             "event_log": list(self.event_log)[:20],
             "memory_count": len(self.memory_buffer),
+            "taught_count": len(self.taught_buffer),
         }
