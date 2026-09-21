@@ -45,6 +45,8 @@ SOMNIA v1 honestly reported the limits of naive dreaming. SOMNIA v2 engineered t
 | **Sleep Policy On Clean Stream** | `49` sleeps (over-triggered) | **`0` false alarms (Calibrated)** | 🛡️ Fixed over-sleeping via adaptive threshold |
 | **Sleep Policy On Drift Stream** | N/A | **`4` sleeps (Drift only, `80.90%` vs `80.33%` fixed)** | 🎯 Triggered strictly during rotation/noise drift |
 
+> *Note: cVAE recon loss (110.70) missed the <90 target, yet the sign still flipped — dream UTILITY (class-targeting) mattered more than dream FIDELITY (pixel reconstruction). Conditioning, not sharpness, healed the network.*
+
 ---
 
 ## 🧠 Visual Proof of Life: The Disagreement Moment & Noise Alarm Spike
