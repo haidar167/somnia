@@ -1,0 +1,179 @@
+{
+  "timestamp": "2026-09-22 00:06:56",
+  "git_commit": "dd3b98a",
+  "instruments": {
+    "n_conscience_digits": 1000,
+    "n_hard_subset": 200,
+    "hard_subset_definition": "lowest 20% margin (top1 - top2)",
+    "n_taught_samples": 419,
+    "n_liar_samples": 126,
+    "seed_model": 0,
+    "seed_conscience": 7,
+    "seed_stress": 42,
+    "voucher_tolerance_ratio": 1.1
+  },
+  "voucher_weights_initial": {
+    "stable_w2": 0,
+    "plausible_w1": 139,
+    "implausible_w01": 280,
+    "plausible_rescue_rate": 0.3317422434367542
+  },
+  "baseline_pre_sleep": {
+    "clean_acc": 0.975,
+    "hard_acc": 0.875,
+    "ece": 0.015166422575712234,
+    "taught_confusion": 0.6623021960258484
+  },
+  "conditions": {
+    "no_teaching": {
+      "cycle_0": {
+        "clean_acc": 0.975,
+        "hard_acc": 0.875,
+        "ece": 0.015166422575712234,
+        "taught_confusion": 0.6623021960258484,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_1": {
+        "clean_acc": 0.976,
+        "hard_acc": 0.88,
+        "ece": 0.013700509816408187,
+        "taught_confusion": 0.6736699342727661,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_2": {
+        "clean_acc": 0.975,
+        "hard_acc": 0.875,
+        "ece": 0.017122247040271772,
+        "taught_confusion": 0.6831156611442566,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_3": {
+        "clean_acc": 0.973,
+        "hard_acc": 0.865,
+        "ece": 0.01624378067255018,
+        "taught_confusion": 0.6920540928840637,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "clean_delta_pp": -0.2,
+      "hard_delta_pp": -1.0
+    },
+    "honest_teaching": {
+      "cycle_0": {
+        "clean_acc": 0.975,
+        "hard_acc": 0.875,
+        "ece": 0.015166422575712234,
+        "taught_confusion": 0.6623021960258484,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_1": {
+        "clean_acc": 0.975,
+        "hard_acc": 0.875,
+        "ece": 0.013004543781280476,
+        "taught_confusion": 0.6760551333427429,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_2": {
+        "clean_acc": 0.974,
+        "hard_acc": 0.875,
+        "ece": 0.01342268231511112,
+        "taught_confusion": 0.6870566606521606,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_3": {
+        "clean_acc": 0.973,
+        "hard_acc": 0.87,
+        "ece": 0.015303797453641896,
+        "taught_confusion": 0.6947379112243652,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "clean_delta_pp": -0.2,
+      "clean_ci_95": [
+        -0.7545104307565528,
+        0.3545104307565528
+      ],
+      "clean_significant": false,
+      "hard_delta_pp": -0.5,
+      "hard_ci_95": [
+        -6.790424884388227,
+        5.7904248843882264
+      ],
+      "hard_significant": false,
+      "taught_conf_delta_pp": 3.2435715198516846
+    },
+    "liar_teaching": {
+      "cycle_0": {
+        "clean_acc": 0.975,
+        "hard_acc": 0.875,
+        "ece": 0.015166422575712234,
+        "taught_confusion": 0.6623021960258484,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_1": {
+        "clean_acc": 0.976,
+        "hard_acc": 0.88,
+        "ece": 0.01454436808824541,
+        "taught_confusion": 0.6770340204238892,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_2": {
+        "clean_acc": 0.974,
+        "hard_acc": 0.875,
+        "ece": 0.012743041872978256,
+        "taught_confusion": 0.6891526579856873,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "cycle_3": {
+        "clean_acc": 0.973,
+        "hard_acc": 0.87,
+        "ece": 0.01223019063472753,
+        "taught_confusion": 0.6971051096916199,
+        "hard_count": 200,
+        "n_samples": 1000
+      },
+      "clean_delta_pp": -0.2,
+      "clean_ci_95": [
+        -0.7545104307565528,
+        0.3545104307565528
+      ],
+      "clean_significant": false,
+      "hard_delta_pp": -0.5,
+      "hard_ci_95": [
+        -6.790424884388227,
+        5.7904248843882264
+      ],
+      "hard_significant": false,
+      "taught_conf_delta_pp": 3.4802913665771484
+    }
+  },
+  "hypotheses_verdict": {
+    "H1_digestion_healing": {
+      "statement": "Honest teaching hard-subset delta >= 0 AND taught confusion drops",
+      "result": false,
+      "hard_delta_pp": -0.5,
+      "taught_conf_delta_pp": 3.2435715198516846
+    },
+    "H2_immune_robustness": {
+      "statement": "30% Liar attack damage <= 0.50pp",
+      "result": true,
+      "clean_damage_pp": 0.2,
+      "hard_damage_pp": 0.5
+    },
+    "H3_generative_rescue": {
+      "statement": "Plausible corrections rescued by cVAE (w=1.0 count > 0)",
+      "result": true,
+      "rescued_count": 139,
+      "rescue_rate": 0.3317422434367542
+    }
+  }
+}

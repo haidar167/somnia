@@ -468,7 +468,7 @@ class SpecimenOrganism:
             taught_p_after = 0.0
 
             if len(self.taught_buffer) > 0:
-                t_list = list(self.taught_buffer)[-100:]
+                t_list = list(self.taught_buffer)
                 taught_x = torch.from_numpy(np.array([t["image"] for t in t_list], dtype=np.float32))
                 taught_y = torch.tensor([t["true_label"] for t in t_list], dtype=torch.long)
 
