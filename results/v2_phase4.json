@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-09-21T22:25:11.183021",
+  "seed": 42,
+  "git_hash": "58718da",
+  "phase": "v2-4",
+  "n_stream": 5000,
+  "v1_policy": {
+    "n_sleeps": 21,
+    "final_accuracy": 0.967
+  },
+  "fixed_schedule": {
+    "n_sleeps": 5,
+    "final_accuracy": 0.9676
+  },
+  "v2_policy": {
+    "n_sleeps": 0,
+    "sleep_positions": [],
+    "final_accuracy": 0.968
+  },
+  "v2_sleep_range_pass": true,
+  "v2_acc_pass": true,
+  "figures": [
+    "figures/v2_policy_comparison.png",
+    "figures/somnia_v2.gif"
+  ]
+}
