@@ -136,12 +136,15 @@ class SpecimenOrganism:
         # Check for dramatic Disagreement between Mouth (confidence) and Gut (P(error))
         disagreement = False
         disagreement_note = ""
-        if conf >= 0.75 and p_err >= 0.25:
+        if conf >= 0.70 and p_err >= 0.25:
             disagreement = True
             disagreement_note = f"The mouth says {pred} ({conf*100:.1f}% sure), but the gut feels danger (P(error) = {p_err*100:.1f}%)!"
         elif conf < 0.50 and p_err < 0.10:
             disagreement = True
             disagreement_note = f"The mouth hesitates ({conf*100:.1f}% confidence), but internal activations are completely calm."
+        elif abs(conf - (1.0 - p_err)) >= 0.35:
+            disagreement = True
+            disagreement_note = f"Mouth and gut diverge: Conf={conf*100:.1f}%, Felt P(error)={p_err*100:.1f}%."
 
         b64_thumb = image_to_base64(img_28x28)
 

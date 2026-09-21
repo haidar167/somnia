@@ -166,20 +166,20 @@ async def trigger_sleep():
 @app.get("/preset/{name}")
 async def get_preset(name: str):
     """Get sample preset images (clean_3, ambiguous_8, noise, blank)."""
+    from somnia.data import load_mnist
+    _, _, test_x, test_y = load_mnist()
     rng = np.random.RandomState(42)
+
     if name == "clean_3":
-        # Generate clean 3 via cVAE
-        with torch.no_grad():
-            dream, _ = organism.cvae.sample_class(1, target_class=3, seed=42)
-        arr = dream[0].numpy()
+        idx = np.where(test_y == 3)[0][0]
+        arr = test_x[idx]
     elif name == "ambiguous_8":
-        # Mixed latent code
-        z = torch.randn(1, 32)
-        with torch.no_grad():
-            dream = organism.cvae.decode(z, torch.tensor([8]))
-        arr = dream[0].numpy()
+        # Select low-margin sample
+        from somnia.sleep import identify_hard_subset
+        hard_idx = identify_hard_subset(organism.classifier, test_x, test_y, n_hard=20)[0]
+        arr = test_x[hard_idx]
     elif name == "noise":
-        arr = rng.uniform(0.0, 0.8, size=(784,)).astype(np.float32)
+        arr = rng.uniform(0.0, 1.0, size=(784,)).astype(np.float32)
     elif name == "blank":
         arr = np.zeros((784,), dtype=np.float32)
     else:

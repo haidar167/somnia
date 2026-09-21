@@ -39,10 +39,21 @@ SOMNIA v1 honestly reported the limits of naive dreaming. SOMNIA v2 engineered t
 | Metric / Bottleneck | v1 Result | v2 Result | Status |
 |---|:---:|:---:|:---:|
 | **Introspective Head AUC** | `0.5879` (starved) | **`0.9137` clean / `0.9276` stress** | 🚀 **+32.6pp** (10-feature MLP on stress set) |
-| **Generative Dream Engine** | Unconditional MLP-VAE | **Class-Conditioned cVAE ($z \in \mathbb{R}^{32}$)** | ✨ Class-targeted, crisp digit synthesis |
+| **Generative Dream Engine** | Unconditional MLP-VAE (`113.94`) | **Class-Conditioned cVAE (`110.70`, $z \in \mathbb{R}^{32}$)** | ✨ Class-targeted, crisp digit synthesis |
 | **Hard-Subset Sleep Delta** | `-0.0480` (interference) | **`+0.0060` (net-positive healing)** | 🎯 **SIGN FLIPPED** (beats random & baseline) |
 | **Hard Subset Final Acc** | `0.6000` | **`0.6540`** | 📈 **+5.4pp improvement** over v1 dreams |
-| **Sleep-on-Demand Policy** | `49` sleeps (over-triggered) | **`0` on clean stream / Calibrated** | 🛡️ Fixed over-sleeping via adaptive threshold |
+| **Sleep Policy On Clean Stream** | `49` sleeps (over-triggered) | **`0` false alarms (Calibrated)** | 🛡️ Fixed over-sleeping via adaptive threshold |
+| **Sleep Policy On Drift Stream** | N/A | **`4` sleeps (Drift only, `80.90%` vs `80.33%` fixed)** | 🎯 Triggered strictly during rotation/noise drift |
+
+---
+
+## 🧠 Visual Proof of Life: The Disagreement Moment & Noise Alarm Spike
+
+<p align="center">
+  <img src="figures/specimen_disagreement.png" alt="The Disagreement Moment" width="680"/>
+  <br/>
+  <img src="figures/specimen_noise_spike.png" alt="Synthetic Noise Alarm Spike" width="560"/>
+</p>
 
 ---
 
