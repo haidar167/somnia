@@ -75,9 +75,13 @@ class SpecimenOrganism:
         self.process_start_time = time.time()
 
         self.sleep_count = int(self.storage.get_meta("sleep_count", 0))
+        self.generation = int(self.storage.get_meta("generation", 1))
         self.total_feeds = int(self.storage.get_meta("total_feeds", 0))
         self.visitor_count = self.storage.get_visitor_count()
         self.is_sleeping = False
+
+        # Fixed Conscience Self-Test Set (200 MNIST digits, seed 7)
+        self._ensure_conscience_set()
 
         # Current Sensory State
         self.current_input_b64: Optional[str] = None
@@ -152,6 +156,31 @@ class SpecimenOrganism:
                 head = IntrospectiveHeadV2(10, 32)
                 # Quick calibration
                 torch.save(head.state_dict(), str(intro_p))
+
+    def _ensure_conscience_set(self):
+        """Create or load the organism's fixed private conscience set (200 MNIST digits, seed 7)."""
+        conscience_p = self.models_dir / "conscience_test.pt"
+        if conscience_p.exists():
+            data = torch.load(str(conscience_p), weights_only=True)
+            self.conscience_x = data["x"]
+            self.conscience_y = data["y"]
+        else:
+            from somnia.data import make_dataloaders
+            _, _, _, val_x_np, val_y_np = make_dataloaders()
+            rng = np.random.RandomState(7)
+            idx = rng.choice(len(val_x_np), size=200, replace=False)
+            self.conscience_x = torch.from_numpy(val_x_np[idx])
+            self.conscience_y = torch.from_numpy(val_y_np[idx])
+            torch.save({"x": self.conscience_x, "y": self.conscience_y}, str(conscience_p))
+
+    def evaluate_conscience(self) -> float:
+        """Evaluate self-test accuracy on the private conscience set."""
+        self.classifier.eval()
+        with torch.no_grad():
+            logits, _ = self.classifier(self.conscience_x)
+            preds = logits.argmax(dim=1)
+            acc = (preds == self.conscience_y).float().mean().item()
+        return float(acc)
 
     def _load_from_storage(self):
         """Load recent dreams, events, and memories from persistent storage."""
@@ -393,7 +422,7 @@ class SpecimenOrganism:
         }
 
     def sleep_cycle(self) -> Dict[str, Any]:
-        """Execute one targeted dream self-healing consolidation cycle with persistence."""
+        """Execute one targeted dream self-healing consolidation cycle with taught memory replay and persistence."""
         if self.is_sleeping:
             return {"status": "already_sleeping"}
 
@@ -403,6 +432,8 @@ class SpecimenOrganism:
         self.log_event(f"SLEEP #{self.sleep_count}: Entering dream consolidation...", "sleep")
 
         try:
+            acc_before = self.evaluate_conscience()
+
             guarded_mems = self.get_diversity_guarded_memory()
 
             # Profile confusion from diversity-guarded memory buffer or fallback
@@ -426,7 +457,59 @@ class SpecimenOrganism:
                 real_x = torch.from_numpy(np.array([m["image"] for m in sample_mem], dtype=np.float32))
                 real_y = torch.tensor([m["pred"] if m["true_label"] is None else m["true_label"] for m in sample_mem], dtype=torch.long)
 
-            self.consolidator.sleep_cycle(real_x, real_y, raw_dreams, pseudo_y, weights)
+            # Replay taught memories with soft stability defense (The Exchange)
+            taught_x = None
+            taught_y = None
+            taught_weights = None
+            taught_p_before = 0.0
+            taught_p_after = 0.0
+
+            if len(self.taught_buffer) > 0:
+                t_list = list(self.taught_buffer)[-100:]
+                taught_x = torch.from_numpy(np.array([t["image"] for t in t_list], dtype=np.float32))
+                taught_y = torch.tensor([t["true_label"] for t in t_list], dtype=torch.long)
+
+                with torch.no_grad():
+                    t_logits, t_h = self.classifier(taught_x)
+                    t_stats = extract_internal_stats_v2(t_h, t_logits)
+                    taught_p_before = float(self.intro_head(t_stats).mean().item())
+
+                # SoftStabilityFilter on taught samples (5 perturbation votes)
+                t_votes = []
+                gen = torch.Generator().manual_seed(42)
+                for _ in range(5):
+                    noise = torch.randn_like(taught_x, generator=gen) * 0.05
+                    pert = (taught_x + noise).clamp(0, 1)
+                    with torch.no_grad():
+                        t_votes.append(self.classifier(pert)[0].argmax(dim=1))
+                votes_stack = torch.stack(t_votes, dim=1)  # (N, 5)
+
+                taught_weights = torch.zeros(len(t_list))
+                for i in range(len(t_list)):
+                    agree = (votes_stack[i] == taught_y[i]).float().mean().item()
+                    if agree >= 0.4:
+                        taught_weights[i] = 2.0
+                    else:
+                        taught_weights[i] = 0.1
+                        self.log_event("a visitor taught me something unstable — I dream on it lightly.", "warning")
+
+            self.consolidator.sleep_cycle(
+                real_x, real_y, raw_dreams, pseudo_y, weights,
+                taught_x=taught_x, taught_y=taught_y, taught_weights=taught_weights
+            )
+
+            # Increment Generation
+            self.generation += 1
+            self.storage.set_meta("generation", self.generation)
+
+            acc_after = self.evaluate_conscience()
+            acc_delta = (acc_after - acc_before) * 100.0
+
+            if taught_x is not None:
+                with torch.no_grad():
+                    t_logits_post, t_h_post = self.classifier(taught_x)
+                    t_stats_post = extract_internal_stats_v2(t_h_post, t_logits_post)
+                    taught_p_after = float(self.intro_head(t_stats_post).mean().item())
 
             # Evaluate dreams with classifier and introspective head for realistic telemetry
             with torch.no_grad():
@@ -469,16 +552,23 @@ class SpecimenOrganism:
             self.recent_dreams = new_dreams
             self.storage.save_dreams(new_dreams)
 
-            post_conf = float(np.mean([m["p_error"] for m in guarded_mems])) if len(guarded_mems) > 0 else 0.05
+            n_taught = len(self.taught_buffer)
             self.log_event(
-                f"SLEEP #{self.sleep_count} COMPLETE: Consolidated 200 targeted dreams. Mean memory confusion: {post_conf*100:.1f}%. Awake.",
+                f"SLEEP #{self.sleep_count} COMPLETE (GEN {self.generation}): Consolidated 200 dreams + {n_taught} taught. Conscience Acc: {acc_before*100:.1f}% -> {acc_after*100:.1f}% (delta: {acc_delta:+.1f}pp). Taught P(error): {taught_p_before*100:.1f}% -> {taught_p_after*100:.1f}%. Awake.",
                 "sleep"
             )
 
             return {
                 "status": "success",
                 "sleep_count": self.sleep_count,
+                "generation": self.generation,
                 "dreams_consolidated": 200,
+                "taught_consolidated": n_taught,
+                "conscience_acc_before": acc_before,
+                "conscience_acc_after": acc_after,
+                "conscience_acc_delta": acc_delta,
+                "taught_p_error_before": taught_p_before,
+                "taught_p_error_after": taught_p_after,
                 "recent_dreams": self.recent_dreams,
             }
         finally:
@@ -518,7 +608,8 @@ class SpecimenOrganism:
         uptime_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
 
         return {
-            "specimen_id": "SPECIMEN #001",
+            "specimen_id": f"SPECIMEN #001 - GEN {self.generation}",
+            "generation": self.generation,
             "uptime_seconds": lifetime_sec,
             "uptime_str": uptime_str,
             "visitor_count": self.visitor_count,

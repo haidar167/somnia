@@ -224,6 +224,9 @@ function drawBrainwaves(history) {
 // UI State Updater
 function updateUI(state) {
   // Header
+  if (document.getElementById('organism-id-display')) {
+    document.getElementById('organism-id-display').innerText = state.specimen_id || 'SPECIMEN #001';
+  }
   document.getElementById('uptime-display').innerText = state.uptime_str || '00:00:00';
   document.getElementById('sleep-count-display').innerText = state.sleep_count || 0;
   document.getElementById('feed-count-display').innerText = state.total_feeds || 0;

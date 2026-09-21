@@ -136,8 +136,11 @@ class SleepConsolidationV2:
 
     def sleep_cycle(self, real_x: torch.Tensor, real_y: torch.Tensor,
                     dream_x: torch.Tensor, dream_y: torch.Tensor,
-                    dream_weights: torch.Tensor):
-        """Run gentle sleep consolidation with soft weighted dream loss."""
+                    dream_weights: torch.Tensor,
+                    taught_x: torch.Tensor = None,
+                    taught_y: torch.Tensor = None,
+                    taught_weights: torch.Tensor = None):
+        """Run gentle sleep consolidation with soft weighted dream loss and taught memories replay."""
         self.classifier.train()
         optimizer = optim.Adam(self.classifier.parameters(), lr=self.lr)
         criterion_unreduced = nn.CrossEntropyLoss(reduction="none")
@@ -145,6 +148,7 @@ class SleepConsolidationV2:
 
         real_loss_val = 0.0
         dream_loss_val = 0.0
+        taught_loss_val = 0.0
 
         for _ in range(self.epochs):
             optimizer.zero_grad()
@@ -159,11 +163,18 @@ class SleepConsolidationV2:
             else:
                 loss_dream = torch.tensor(0.0)
 
-            total_loss = loss_real + self.dream_mix * loss_dream
+            loss_taught = torch.tensor(0.0)
+            if taught_x is not None and taught_x.shape[0] > 0 and taught_weights is not None and taught_weights.sum() > 0:
+                logits_taught, _ = self.classifier(taught_x)
+                losses_taught = criterion_unreduced(logits_taught, taught_y)
+                loss_taught = (losses_taught * taught_weights).sum() / (taught_weights.sum() + 1e-8)
+
+            total_loss = loss_real + self.dream_mix * loss_dream + loss_taught
             total_loss.backward()
             optimizer.step()
 
             real_loss_val = loss_real.item()
             dream_loss_val = loss_dream.item()
+            taught_loss_val = loss_taught.item()
 
         return real_loss_val, dream_loss_val

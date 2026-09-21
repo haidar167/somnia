@@ -25,7 +25,7 @@ def client():
 class TestSpecimenOrganism:
     def test_initial_state(self, test_organism):
         state = test_organism.get_state()
-        assert state["specimen_id"] == "SPECIMEN #001"
+        assert "SPECIMEN #001" in state["specimen_id"]
         assert state["total_feeds"] == 0
         assert state["sleep_count"] == 0
         assert not state["is_sleeping"]
@@ -83,7 +83,7 @@ class TestSpecimenAPI:
         res = client.get("/state")
         assert res.status_code == 200
         data = res.json()
-        assert data["specimen_id"] == "SPECIMEN #001"
+        assert "SPECIMEN #001" in data["specimen_id"]
         assert "vitals" in data
 
     def test_get_history(self, client):
