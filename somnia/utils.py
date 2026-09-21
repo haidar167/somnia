@@ -48,7 +48,7 @@ def save_results(filepath: str, metrics: dict, seed: int = 0) -> None:
     }
     with open(filepath, "w") as f:
         json.dump(payload, f, indent=2, default=str)
-    print(f"[SOMNIA] Results saved → {filepath}")
+    print(f"[SOMNIA] Results saved -> {filepath}")
 
 
 def project_root() -> Path:

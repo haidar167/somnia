@@ -1,0 +1,50 @@
+{
+  "timestamp": "2026-09-21T21:26:30.805340",
+  "seed": 0,
+  "git_hash": "11d1cd8",
+  "phase": 1,
+  "classifier_test_acc": 0.9693,
+  "classifier_history": [
+    {
+      "epoch": 1,
+      "loss": 0.382068262852322,
+      "acc": 0.8967454545454545
+    },
+    {
+      "epoch": 2,
+      "loss": 0.17166513695174998,
+      "acc": 0.9510545454545455
+    },
+    {
+      "epoch": 3,
+      "loss": 0.11862272627787157,
+      "acc": 0.9658
+    }
+  ],
+  "vae_history": [
+    {
+      "epoch": 1,
+      "loss_per_sample": 177.9560949041193
+    },
+    {
+      "epoch": 2,
+      "loss_per_sample": 128.07165914417612
+    },
+    {
+      "epoch": 3,
+      "loss_per_sample": 119.81791491477273
+    },
+    {
+      "epoch": 4,
+      "loss_per_sample": 116.13337711292614
+    },
+    {
+      "epoch": 5,
+      "loss_per_sample": 113.93594881036933
+    }
+  ],
+  "introspective_auc": 0.5879148123065016,
+  "figures": [
+    "figures/phase1_recon.png"
+  ]
+}
