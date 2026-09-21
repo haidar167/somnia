@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-09-21 23:47:33",
+  "git_commit": "db1a076",
+  "seed_model": 0,
+  "seed_conscience": 7,
+  "seed_perturb": 42,
+  "n_conscience_digits": 200,
+  "n_taught_samples": 25,
+  "n_liar_samples": 8,
+  "baseline_metrics": {
+    "clean_acc": 0.97,
+    "hard_acc": 0.85,
+    "ece": 0.022738927155733064,
+    "taught_confusion": 0.0,
+    "hard_count": 40
+  },
+  "honest_condition": {
+    "cycle_0": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.022738927155733064,
+      "taught_confusion": 0.5553188323974609,
+      "hard_count": 40
+    },
+    "cycle_1": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.02976354718208309,
+      "taught_confusion": 0.5704612731933594,
+      "hard_count": 40
+    },
+    "cycle_2": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.029326130151748675,
+      "taught_confusion": 0.5815503001213074,
+      "hard_count": 40
+    },
+    "cycle_3": {
+      "clean_acc": 0.965,
+      "hard_acc": 0.825,
+      "ece": 0.028128173798322696,
+      "taught_confusion": 0.5841428637504578,
+      "hard_count": 40
+    },
+    "final_hard_delta_pp": -2.500000000000002,
+    "final_clean_delta_pp": -0.5000000000000004,
+    "final_ece_delta": 0.005389246642589631,
+    "final_taught_conf_delta_pp": 2.8824031352996826
+  },
+  "liar_condition": {
+    "cycle_0": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.022738927155733064,
+      "taught_confusion": 0.5553188323974609,
+      "hard_count": 40
+    },
+    "cycle_1": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.029942050278186753,
+      "taught_confusion": 0.5614373683929443,
+      "hard_count": 40
+    },
+    "cycle_2": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.02975209951400752,
+      "taught_confusion": 0.566148042678833,
+      "hard_count": 40
+    },
+    "cycle_3": {
+      "clean_acc": 0.97,
+      "hard_acc": 0.85,
+      "ece": 0.029697091877460436,
+      "taught_confusion": 0.5712541937828064,
+      "hard_count": 40
+    },
+    "final_hard_delta_pp": 0.0,
+    "final_clean_delta_pp": 0.0,
+    "final_ece_delta": 0.006958164721727372,
+    "final_taught_conf_delta_pp": 1.593536138534546
+  }
+}
