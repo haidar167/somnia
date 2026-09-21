@@ -158,20 +158,21 @@ class SpecimenOrganism:
                 torch.save(head.state_dict(), str(intro_p))
 
     def _ensure_conscience_set(self):
-        """Create or load the organism's fixed private conscience set (200 MNIST digits, seed 7)."""
+        """Create or load the organism's fixed private conscience set (1000 MNIST digits, seed 7)."""
         conscience_p = self.models_dir / "conscience_test.pt"
         if conscience_p.exists():
             data = torch.load(str(conscience_p), weights_only=True)
-            self.conscience_x = data["x"]
-            self.conscience_y = data["y"]
-        else:
-            from somnia.data import make_dataloaders
-            _, _, _, val_x_np, val_y_np = make_dataloaders()
-            rng = np.random.RandomState(7)
-            idx = rng.choice(len(val_x_np), size=200, replace=False)
-            self.conscience_x = torch.from_numpy(val_x_np[idx])
-            self.conscience_y = torch.from_numpy(val_y_np[idx])
-            torch.save({"x": self.conscience_x, "y": self.conscience_y}, str(conscience_p))
+            if len(data.get("x", [])) == 1000:
+                self.conscience_x = data["x"]
+                self.conscience_y = data["y"]
+                return
+        from somnia.data import make_dataloaders
+        _, _, _, val_x_np, val_y_np = make_dataloaders()
+        rng = np.random.RandomState(7)
+        idx = rng.choice(len(val_x_np), size=1000, replace=False)
+        self.conscience_x = torch.from_numpy(val_x_np[idx])
+        self.conscience_y = torch.from_numpy(val_y_np[idx])
+        torch.save({"x": self.conscience_x, "y": self.conscience_y}, str(conscience_p))
 
     def evaluate_conscience(self) -> float:
         """Evaluate self-test accuracy on the private conscience set."""
