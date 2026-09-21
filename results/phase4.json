@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-09-21T21:35:06.589505",
+  "seed": 42,
+  "git_hash": "7bbce1a",
+  "phase": 4,
+  "sleep_on_demand": {
+    "n_sleep_events": 49,
+    "sleep_positions": [
+      49,
+      89,
+      129,
+      169,
+      209,
+      249,
+      289,
+      329,
+      369,
+      409,
+      449,
+      489,
+      529,
+      569,
+      609,
+      649,
+      689,
+      729,
+      788,
+      828
+    ],
+    "final_accuracy": 0.9605,
+    "alarm_threshold": 0.15,
+    "window_size": 50
+  },
+  "fixed_schedule": {
+    "n_sleep_events": 5,
+    "sleep_positions": [
+      399,
+      799,
+      1199,
+      1599,
+      1999
+    ],
+    "final_accuracy": 0.972,
+    "interval": 400
+  },
+  "on_demand_better": false,
+  "figures": [
+    "figures/phase4_ondemand.png",
+    "figures/somnia_dreams.gif"
+  ]
+}
