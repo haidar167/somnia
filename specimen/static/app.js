@@ -113,6 +113,14 @@ async function loadPreset(presetName) {
   }
 }
 
+// Anonymous Visitor ID (Stored in localStorage)
+let visitorId = localStorage.getItem('specimen_visitor_id');
+if (!visitorId) {
+  const randomHex = Math.random().toString(16).substring(2, 10);
+  visitorId = `mind_${randomHex}`;
+  localStorage.setItem('specimen_visitor_id', visitorId);
+}
+
 // Feed Button
 document.getElementById('btn-feed').addEventListener('click', async () => {
   const floatArr = getCanvas28x28Array();
@@ -120,7 +128,7 @@ document.getElementById('btn-feed').addEventListener('click', async () => {
     const res = await fetch('/feed', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image: floatArr })
+      body: JSON.stringify({ image: floatArr, visitor_id: visitorId })
     });
     const data = await res.json();
     console.log("Feed response:", data);
@@ -141,7 +149,7 @@ document.getElementById('btn-reveal').addEventListener('click', async () => {
     await fetch('/reveal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label: val })
+      body: JSON.stringify({ label: val, visitor_id: visitorId })
     });
     inputEl.value = '';
   } catch (err) {

@@ -9,6 +9,9 @@ from typing import List, Dict, Any, Optional
 from somnia.utils import project_root
 
 
+from contextlib import contextmanager
+
+
 class SpecimenStorage:
     """Persistent SQLite database manager for THE SPECIMEN."""
 
@@ -19,10 +22,14 @@ class SpecimenStorage:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_tables()
 
-    def _get_conn(self) -> sqlite3.Connection:
+    @contextmanager
+    def _get_conn(self):
         conn = sqlite3.connect(str(self.db_path))
         conn.row_factory = sqlite3.Row
-        return conn
+        try:
+            yield conn
+        finally:
+            conn.close()
 
     def _init_tables(self):
         """Create database tables if they don't exist."""

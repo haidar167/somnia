@@ -111,6 +111,7 @@ async def get_history():
 class FeedRequest(BaseModel):
     image: Optional[List[float]] = None
     image_b64: Optional[str] = None
+    visitor_id: Optional[str] = None
 
 
 @app.post("/feed")
@@ -132,7 +133,7 @@ async def feed_organism(req: FeedRequest):
     else:
         raise HTTPException(status_code=400, detail="Must provide 'image' (784 floats) or 'image_b64'")
 
-    result = organism.feed(img_arr)
+    result = organism.feed(img_arr, visitor_id=req.visitor_id)
     # Broadcast immediate update
     await manager.broadcast_state()
     return result
@@ -140,14 +141,31 @@ async def feed_organism(req: FeedRequest):
 
 class RevealRequest(BaseModel):
     label: int
+    visitor_id: Optional[str] = None
 
 
 @app.post("/reveal")
 async def reveal_label(req: RevealRequest):
     """Reveal ground truth label for the most recent sample."""
-    result = organism.reveal(req.label)
+    result = organism.reveal(req.label, visitor_id=req.visitor_id)
     await manager.broadcast_state()
     return result
+
+
+@app.get("/health")
+async def health_check():
+    """Healthcheck endpoint for monitoring uptime and state."""
+    state = organism.get_state()
+    return {
+        "status": "alive",
+        "specimen_id": state["specimen_id"],
+        "uptime_seconds": state["uptime_seconds"],
+        "uptime_str": state["uptime_str"],
+        "total_feeds": state["total_feeds"],
+        "sleep_count": state["sleep_count"],
+        "known_visitors": state["visitor_count"],
+        "is_sleeping": state["is_sleeping"]
+    }
 
 
 @app.post("/sleep")
