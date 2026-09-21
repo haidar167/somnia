@@ -3,6 +3,7 @@
 import time
 import base64
 import io
+import hashlib
 import collections
 from pathlib import Path
 from typing import Dict, List, Any, Optional
@@ -44,23 +45,17 @@ class SpecimenOrganism:
         # Ensure checkpoints exist (auto-bootstrap if missing)
         self._ensure_models_exist()
 
-        # Initialize biology
+        # Neural Biology Substrates
         self.classifier = ClassifierMLP()
-        self.classifier.load_state_dict(
-            torch.load(str(self.models_dir / "classifier.pt"), weights_only=True)
-        )
+        self.classifier.load_state_dict(torch.load(str(self.models_dir / "classifier.pt"), weights_only=True))
         self.classifier.eval()
 
         self.cvae = ConditionalVAE(latent_dim=32)
-        self.cvae.load_state_dict(
-            torch.load(str(self.models_dir / "cvae.pt"), weights_only=True)
-        )
+        self.cvae.load_state_dict(torch.load(str(self.models_dir / "cvae.pt"), weights_only=True))
         self.cvae.eval()
 
-        self.intro_head = IntrospectiveHeadV2(input_dim=10, hidden_dim=32)
-        self.intro_head.load_state_dict(
-            torch.load(str(self.models_dir / "intro_head_v2.pt"), weights_only=True)
-        )
+        self.intro_head = IntrospectiveHeadV2(10, 32)
+        self.intro_head.load_state_dict(torch.load(str(self.models_dir / "intro_head_v2.pt"), weights_only=True))
         self.intro_head.eval()
 
         self.dreamer = DreamerV2(self.classifier, self.cvae, self.intro_head)
@@ -76,8 +71,11 @@ class SpecimenOrganism:
         self.first_awake_time = float(first_awake)
         self.process_start_time = time.time()
 
+        # Single source of truth: GEN == sleep_count (R2)
         self.sleep_count = int(self.storage.get_meta("sleep_count", 0))
-        self.generation = int(self.storage.get_meta("generation", 1))
+        self.generation = self.sleep_count
+        self.storage.set_meta("generation", self.generation)
+
         self.total_feeds = int(self.storage.get_meta("total_feeds", 0))
         self.visitor_count = self.storage.get_visitor_count()
         self.is_sleeping = False
@@ -107,7 +105,7 @@ class SpecimenOrganism:
         self.last_feed_bytes: bytes = b""
         self.last_feed_visitor: Optional[str] = None
 
-        # Load persisted history from DB
+        # Load persisted history from DB exactly once at boot (R1)
         self._load_from_storage()
         self.log_event("Organism awakened. State restored from persistent substrate.", "system")
 
@@ -189,7 +187,13 @@ class SpecimenOrganism:
         """Load recent dreams, events, and memories from persistent storage."""
         # Load recent dreams
         db_dreams = self.storage.get_recent_dreams(limit=8)
-        if db_dreams and len(db_dreams) > 0:
+        has_valid_variety = (
+            db_dreams
+            and len(db_dreams) >= 4
+            and any(d.get("p_error", 0.0) > 0.001 for d in db_dreams)
+            and len(set(d.get("target_class", 0) for d in db_dreams)) > 1
+        )
+        if has_valid_variety:
             self.recent_dreams = db_dreams
         else:
             self._bootstrap_initial_dreams()
@@ -376,7 +380,7 @@ class SpecimenOrganism:
         }
 
     def reveal(self, true_label: int, visitor_id: Optional[str] = None) -> Dict[str, Any]:
-        """Reveal ground truth label for the last fed sample and store in taught buffer."""
+        """Reveal ground truth label for the last fed sample and store in taught buffer with hygiene and second opinion."""
         if len(self.memory_buffer) == 0:
             return {"status": "error", "message": "No input to reveal"}
 
@@ -389,37 +393,92 @@ class SpecimenOrganism:
         if visitor_id:
             self.storage.record_visitor_reveal(visitor_id, was_correct)
 
-        # Store in taught memory buffer & DB (The Exchange)
+        # Image hash for dedup (R4a)
+        img_arr = np.array(last_item["image"], dtype=np.float32)
+        img_hash = hashlib.sha256(img_arr.tobytes()).hexdigest()
+
+        # Classify reveal (R4b & R4c)
+        p_err_pct = last_item["p_error"] * 100.0
         v_id_str = visitor_id if visitor_id else "anonymous"
-        taught_entry = {
-            "image": list(last_item["image"]),
-            "true_label": int(true_label),
-            "what_the_organism_said": int(last_item["pred"]),
-            "p_error": float(last_item["p_error"]),
-            "visitor_id": v_id_str,
-            "was_correct": was_correct,
-            "timestamp": time.time(),
-        }
-        self.taught_buffer.append(taught_entry)
+
+        if was_correct:
+            verdict = "CONFIRMATION"
+            weight = 0.5
+            core_msg = f"this was a {true_label} (I said {last_item['pred']} -- I was RIGHT). verdict: CONFIRMATION, weight 0.5."
+        else:
+            # Evaluate correction with Second Opinion voucher
+            t_x = torch.from_numpy(img_arr).unsqueeze(0)
+            t_y = torch.tensor([int(true_label)], dtype=torch.long)
+            voucher_res = self.voucher.evaluate_taught_batch(t_x, t_y, self.classifier)
+            is_plausible = bool(voucher_res["is_plausible"][0].item())
+
+            if is_plausible:
+                verdict = "PLAUSIBLE CORRECTION"
+                weight = 1.0
+                core_msg = f"this was a {true_label} (I said {last_item['pred']}, felt P(error)={p_err_pct:.1f}%). verdict: PLAUSIBLE CORRECTION, weight 1.0."
+            else:
+                verdict = "IMPLAUSIBLE"
+                weight = 0.1
+                core_msg = f"this was a {true_label} (I said {last_item['pred']}). verdict: IMPLAUSIBLE -- dreamed on lightly (0.1)."
+
+        # Check existing in taught_buffer for in-memory dedup
+        existing_taught = None
+        for tm in self.taught_buffer:
+            if tm.get("image_hash") == img_hash:
+                existing_taught = tm
+                break
+
+        if existing_taught is not None:
+            existing_taught["times_taught"] = existing_taught.get("times_taught", 1) + 1
+            existing_taught["true_label"] = int(true_label)
+            existing_taught["what_the_organism_said"] = int(last_item["pred"])
+            existing_taught["p_error"] = float(last_item["p_error"])
+            existing_taught["was_correct"] = was_correct
+            existing_taught["weight"] = weight
+            existing_taught["verdict"] = verdict
+            existing_taught["timestamp"] = time.time()
+            times_taught = existing_taught["times_taught"]
+            log_str = f"visitor taught me again (x{times_taught}): " + core_msg
+        else:
+            times_taught = 1
+            taught_entry = {
+                "image": list(last_item["image"]),
+                "true_label": int(true_label),
+                "what_the_organism_said": int(last_item["pred"]),
+                "p_error": float(last_item["p_error"]),
+                "visitor_id": v_id_str,
+                "was_correct": was_correct,
+                "timestamp": time.time(),
+                "image_hash": img_hash,
+                "times_taught": times_taught,
+                "weight": weight,
+                "verdict": verdict,
+            }
+            self.taught_buffer.append(taught_entry)
+            log_str = f"visitor taught me: " + core_msg
+
         self.storage.add_taught_memory(
             last_item["image"],
             int(true_label),
             int(last_item["pred"]),
             float(last_item["p_error"]),
             v_id_str,
-            was_correct
+            was_correct,
+            image_hash=img_hash,
+            times_taught=times_taught,
+            weight=weight,
+            verdict=verdict
         )
 
-        p_err_pct = last_item["p_error"] * 100.0
-        self.log_event(
-            f"visitor taught me: this was a {true_label} (I said {last_item['pred']}, felt P(error)={p_err_pct:.1f}%). I will dream about it.",
-            "taught"
-        )
+        self.log_event(log_str, "taught")
 
         return {
             "predicted": last_item["pred"],
             "true_label": true_label,
             "was_correct": was_correct,
+            "verdict": verdict,
+            "weight": weight,
+            "times_taught": times_taught,
             "p_error_before": last_item["p_error"],
             "taught_count": len(self.taught_buffer),
         }
@@ -431,7 +490,9 @@ class SpecimenOrganism:
 
         self.is_sleeping = True
         self.sleep_count += 1
+        self.generation = self.sleep_count
         self.storage.set_meta("sleep_count", self.sleep_count)
+        self.storage.set_meta("generation", self.generation)
         self.log_event(f"SLEEP #{self.sleep_count}: Entering dream consolidation...", "sleep")
 
         try:
@@ -460,7 +521,7 @@ class SpecimenOrganism:
                 real_x = torch.from_numpy(np.array([m["image"] for m in sample_mem], dtype=np.float32))
                 real_y = torch.tensor([m["pred"] if m["true_label"] is None else m["true_label"] for m in sample_mem], dtype=torch.long)
 
-            # Replay taught memories with soft stability defense (The Exchange)
+            # Replay taught memories with stored/vouched weights
             taught_x = None
             taught_y = None
             taught_weights = None
@@ -471,36 +532,22 @@ class SpecimenOrganism:
                 t_list = list(self.taught_buffer)
                 taught_x = torch.from_numpy(np.array([t["image"] for t in t_list], dtype=np.float32))
                 taught_y = torch.tensor([t["true_label"] for t in t_list], dtype=torch.long)
+                taught_weights = torch.tensor([t.get("weight", 1.0) for t in t_list], dtype=torch.float32)
 
                 with torch.no_grad():
                     t_logits, t_h = self.classifier(taught_x)
                     t_stats = extract_internal_stats_v2(t_h, t_logits)
                     taught_p_before = float(self.intro_head(t_stats).mean().item())
 
-                # Evaluate taught memories with SecondOpinionVoucher (v3.1)
-                voucher_res = self.voucher.evaluate_taught_batch(
-                    taught_x, taught_y, self.classifier, n_perturbations=5, noise_std=0.05, seed=42
-                )
-                taught_weights = voucher_res["weights"]
-                verdicts = voucher_res["verdicts"]
-
-                for i, v in enumerate(verdicts):
-                    w_val = float(taught_weights[i].item())
-                    if v == "plausible_correction":
-                        self.log_event(f"taught: plausible correction (w={w_val:.1f}) -- second opinion vouches.", "info")
-                    elif v == "implausible_whisper":
-                        self.log_event(f"taught: implausible (w={w_val:.1f}) -- unstable whisper.", "warning")
-                    elif v == "stable_reinforcement":
-                        self.log_event(f"taught: stable reinforcement (w={w_val:.1f}).", "info")
-
             self.consolidator.sleep_cycle(
                 real_x, real_y, raw_dreams, pseudo_y, weights,
                 taught_x=taught_x, taught_y=taught_y, taught_weights=taught_weights
             )
 
-            # Increment Generation
-            self.generation += 1
+            # Ensure generation & sleep count in sync (R2)
+            self.generation = self.sleep_count
             self.storage.set_meta("generation", self.generation)
+            self.storage.set_meta("sleep_count", self.sleep_count)
 
             acc_after = self.evaluate_conscience()
             acc_delta = (acc_after - acc_before) * 100.0
@@ -576,7 +623,7 @@ class SpecimenOrganism:
 
     def _bootstrap_initial_dreams(self):
         """Generate initial dream feed on first boot and save to DB."""
-        raw_dreams, dream_labels = self.dreamer.generate_random_dreams(n=16, seed=42)
+        raw_dreams, dream_labels = self.dreamer.generate_random_dreams(n=10, seed=42)
         pseudo_y, weights = self.stability.compute_soft_weights(raw_dreams, seed=42)
         with torch.no_grad():
             d_logits, d_h = self.classifier(raw_dreams)

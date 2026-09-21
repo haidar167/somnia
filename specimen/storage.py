@@ -109,9 +109,24 @@ class SpecimenStorage:
                     p_error_at_feed REAL,
                     visitor_id TEXT,
                     was_correct INTEGER,
-                    timestamp REAL
+                    timestamp REAL,
+                    image_hash TEXT,
+                    times_taught INTEGER DEFAULT 1,
+                    weight REAL DEFAULT 1.0,
+                    verdict TEXT DEFAULT ''
                 )
             """)
+            # Safe schema migrations for existing SQLite databases
+            for col, col_type in [
+                ("image_hash", "TEXT"),
+                ("times_taught", "INTEGER DEFAULT 1"),
+                ("weight", "REAL DEFAULT 1.0"),
+                ("verdict", "TEXT DEFAULT ''"),
+            ]:
+                try:
+                    cur.execute(f"ALTER TABLE taught_memories ADD COLUMN {col} {col_type}")
+                except Exception:
+                    pass
             conn.commit()
 
     # Metadata operations
@@ -252,21 +267,38 @@ class SpecimenStorage:
     # Taught memory operations (The Exchange)
     def add_taught_memory(self, image_flat: List[float], true_label: int,
                           what_the_organism_said: int, p_error_at_feed: float,
-                          visitor_id: str, was_correct: bool):
+                          visitor_id: str, was_correct: bool,
+                          image_hash: str = "", times_taught: int = 1,
+                          weight: float = 1.0, verdict: str = ""):
         now = time.time()
         with self._get_conn() as conn:
             cur = conn.cursor()
+            if image_hash:
+                cur.execute("SELECT id, times_taught FROM taught_memories WHERE image_hash = ?", (image_hash,))
+                row = cur.fetchone()
+                if row is not None:
+                    new_count = row["times_taught"] + 1
+                    cur.execute("""
+                        UPDATE taught_memories
+                        SET times_taught = ?, true_label = ?, what_the_organism_said = ?,
+                            p_error_at_feed = ?, visitor_id = ?, was_correct = ?, weight = ?, verdict = ?, timestamp = ?
+                        WHERE id = ?
+                    """, (new_count, true_label, what_the_organism_said, p_error_at_feed, visitor_id, 1 if was_correct else 0, weight, verdict, now, row["id"]))
+                    conn.commit()
+                    return new_count
+
             cur.execute("""
-                INSERT INTO taught_memories (image_json, true_label, what_the_organism_said, p_error_at_feed, visitor_id, was_correct, timestamp)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (json.dumps(image_flat), true_label, what_the_organism_said, p_error_at_feed, visitor_id, 1 if was_correct else 0, now))
+                INSERT INTO taught_memories (image_json, true_label, what_the_organism_said, p_error_at_feed, visitor_id, was_correct, timestamp, image_hash, times_taught, weight, verdict)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (json.dumps(image_flat), true_label, what_the_organism_said, p_error_at_feed, visitor_id, 1 if was_correct else 0, now, image_hash, times_taught, weight, verdict))
             conn.commit()
+            return times_taught
 
     def get_taught_memories(self, limit: int = 500) -> List[Dict[str, Any]]:
         with self._get_conn() as conn:
             cur = conn.cursor()
             cur.execute("""
-                SELECT id, image_json, true_label, what_the_organism_said, p_error_at_feed, visitor_id, was_correct, timestamp
+                SELECT id, image_json, true_label, what_the_organism_said, p_error_at_feed, visitor_id, was_correct, timestamp, image_hash, times_taught, weight, verdict
                 FROM taught_memories ORDER BY id DESC LIMIT ?
             """, (limit,))
             rows = cur.fetchall()
@@ -280,6 +312,10 @@ class SpecimenStorage:
                     "visitor_id": r["visitor_id"],
                     "was_correct": bool(r["was_correct"]),
                     "timestamp": r["timestamp"],
+                    "image_hash": r["image_hash"] if "image_hash" in r.keys() and r["image_hash"] else "",
+                    "times_taught": r["times_taught"] if "times_taught" in r.keys() and r["times_taught"] else 1,
+                    "weight": r["weight"] if "weight" in r.keys() and r["weight"] is not None else 1.0,
+                    "verdict": r["verdict"] if "verdict" in r.keys() and r["verdict"] else "",
                 }
                 for r in rows
             ]

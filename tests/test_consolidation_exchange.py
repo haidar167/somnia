@@ -13,7 +13,8 @@ class TestConsolidationExchange:
         db_path = str(tmp_path / "test_gen.db")
         org = SpecimenOrganism(db_path=db_path)
         initial_gen = org.generation
-        assert initial_gen == 1
+        assert initial_gen == 0
+        assert org.sleep_count == 0
 
         # Feed and teach 3 samples
         for i in range(3):
@@ -26,16 +27,18 @@ class TestConsolidationExchange:
         # Run sleep cycle
         res = org.sleep_cycle()
         assert res["status"] == "success"
-        assert org.generation == 2
-        assert res["generation"] == 2
+        assert org.generation == 1
+        assert res["generation"] == 1
+        assert org.sleep_count == 1
         assert res["taught_consolidated"] == 3
         assert "conscience_acc_before" in res
         assert "conscience_acc_after" in res
 
         # Verify state
         state = org.get_state()
-        assert state["generation"] == 2
-        assert "GEN 2" in state["specimen_id"]
+        assert state["generation"] == 1
+        assert state["sleep_count"] == 1
+        assert "GEN 1" in state["specimen_id"]
 
     def test_adversarial_safety_defense(self, tmp_path):
         """Adversarial Safety Test: 100 taught samples with 50% corrupted (liar) labels.
