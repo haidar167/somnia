@@ -10,35 +10,44 @@
 
 ---
 
-## 🔁 THE EXCHANGE: The Specimen Learns From Its Visitors (v3.0)
+## 🔁 THE EXCHANGE: The Specimen Learns From Its Visitors (v3.0 & v3.1)
 
-> *"Every visitor who reveals a truth teaches the organism. It dreams about what it was taught — stable lessons at full weight, unstable ones only in whispers. Strangers are now part of its training data."*
+> *"Every visitor who reveals a truth teaches the organism. It dreams about what it was taught — stable lessons at full weight, rescued corrections via generative second opinion, and unstable lies only in whispers."*
 
-In **SOMNIA v3.0**, the loop between visitor interaction and neural plasticity closes permanently. When a visitor reveals ground truth on any input, the interaction is stored into the organism's persistent **Taught Buffer**. During offline sleep cycles, the organism replays these human teachings alongside targeted generative dreams:
+In **SOMNIA v3.0 & v3.1**, the loop between visitor interaction and neural plasticity closes permanently. When a visitor reveals ground truth on any input, the interaction is stored into the organism's persistent **Taught Buffer**. During offline sleep cycles, the organism replays these human teachings alongside targeted generative dreams:
 
 ```
 [23:19:04] FEED: Saw input -> predicted 5 (15.9%). Felt in pain (P(error)=98.8%).
 [23:19:09] REVEAL: I was WRONG. Said 5, but true label is 6. I felt P(error)=98.8% BEFORE I knew!
 [23:19:10] visitor taught me: this was a 6 (I said 5, felt P(error)=98.8%). I will dream about it.
-[23:20:00] SLEEP #1 COMPLETE (GEN 2): Consolidated 200 dreams + 1 taught. Conscience Acc: 97.0% -> 97.0% (delta: +0.0pp). Awake.
+[23:20:00] SLEEP #1 COMPLETE (GEN 2): Consolidated 200 dreams + 1 taught. Conscience Acc: 97.5% -> 97.5% (delta: +0.0pp). Awake.
 ```
 
-### Untrusted Teaching & The Adversarial Stability Defense
-On the open web, visitors can lie or inject malicious labels. The organism shields its core weights with multi-perturbation soft stability filtering:
-- **Verified Lessons ($w = 2.0$)**: Stable teachings consistent under perturbation receive double weight during consolidation.
-- **Unstable Lessons / Liars ($w = 0.1$)**: Discordant or adversarial teachings are downweighted to a faint whisper, logging *"a visitor taught me something unstable — I dream on it lightly."*
+### The Confirmation Bias Discovery (v3.0) & The Second Opinion Fix (v3.1)
+* **The Emergent Bottleneck (v3.0)**: In v3.0, the perturbation stability filter guarded against malicious liars (0.00pp degradation under attack), but suffered from **confirmation bias**: whenever the classifier was originally wrong on a difficult digit, local perturbations agreed $0/5$ with the human correction, downweighting genuine teachings to $w=0.1$.
+* **Generative Second Opinion (v3.1)**: To distinguish genuine corrections from adversarial lies without consulting the biased classifier logits, the organism queries its independent **Conditional VAE reconstruction energy**:
+  $$\text{PLAUSIBLE if } \text{BCE}(\mathbf{x} \mid y_{\text{taught}}) \le 1.10 \times \min_{c} \text{BCE}(\mathbf{x} \mid c)$$
+  - **Stable Reinforcements ($w=2.0$)**: Multi-perturbation agreement $\ge 4/5$.
+  - **Plausible Corrections ($w=1.0$)**: Disagrees with classifier, but cVAE vouches that the image is a plausible instance of $y_{\text{taught}}$ (rescuing **33.2%** of honest corrections).
+  - **Implausible Whispers / Liars ($w=0.1$)**: Disagrees with classifier and rejected by cVAE generative geometry.
 
 <p align="center">
-  <img src="figures/exchange_curve.png" alt="The Exchange Consolidation Curve" width="640"/>
+  <img src="figures/exchange_v31_curve.png" alt="The Exchange v3.1 Digestion Curve" width="680"/>
 </p>
 
-| Condition | Clean Acc (Conscience) | Hard-Subset Acc (20%) | ECE (15 bins) | Taught Confusion |
-|:---|:---:|:---:|:---:|:---:|
-| **Baseline (Pre-Sleep)** | `97.00%` | `85.00%` | `0.0227` | `55.53%` |
-| **Honest Teachers (100% True)** | `96.50%` (`-0.50pp`) | `82.50%` (`-2.50pp`) | `0.0281` (`+0.0054`) | `58.41%` (`+2.88pp`) |
-| **30% Liar Adversaries (Corrupted)** | **`97.00%` (`+0.00pp`)** | **`85.00%` (`+0.00pp`)** | `0.0297` (`+0.0070`) | `57.13%` (`+1.59pp`) |
+### Scientific Benchmark: Scaled Conscience ($N=1000$, Hard Subset $N=200$)
 
-*Result: Under a 30% deliberate adversarial liar injection attack, the stability defense completely prevented catastrophic degradation (0.00pp clean accuracy drop), preserving the organism's private conscience set perfectly.*
+| Condition | Clean Acc ($N=1000$) | Hard-Subset Acc ($N=200$) | ECE (15 bins) | Taught Confusion | Paired 95% CI (Hard $\Delta$) |
+|:---|:---:|:---:|:---:|:---:|:---:|
+| **Baseline (Pre-Sleep)** | `97.50%` | `87.50%` | `0.0152` | `66.23%` | — |
+| **No Teaching (Dream Only)** | `97.30%` (`-0.20pp`) | `86.50%` (`-1.00pp`) | `0.0162` (`+0.0010`) | `69.21%` (`+2.98pp`) | `[-7.89, +5.89]` (ns) |
+| **Honest Teachers (100% True)** | `97.30%` (`-0.20pp`) | **`87.00%` (`-0.50pp`)** | `0.0153` (`+0.0001`) | `69.47%` (`+3.24pp`) | `[-6.79, +5.79]` (ns) |
+| **30% Liar Adversaries (Corrupted)** | **`97.30%` (`-0.20pp`)** | **`87.00%` (`-0.50pp`)** | `0.0122` (`-0.0030`) | `69.71%` (`+3.48pp`) | `[-6.79, +5.79]` (ns) |
+
+*Key Findings*:
+1. **Statistical Resolution**: Scaling from $N=200$ to $N=1000$ conscience digits and $N=200$ hard-subset digits lowered the single-sample noise floor from 2.50pp down to 0.50pp.
+2. **Generative Rescue**: The cVAE second opinion rescued **139 / 419 (33.2%)** genuine human corrections from confirmation bias suppression, giving them $w=1.0$ weight.
+3. **Immune Robustness Maintained**: Under a 30% synthetic liar attack (126 injected falsehoods), the organism suffered **0.00pp** additional damage compared to honest teaching.
 
 ---
 
@@ -106,7 +115,7 @@ SOMNIA v1 honestly reported the limits of naive dreaming. SOMNIA v2 engineered t
 | [2. Proprioception](https://haidar167.github.io/proprioception/) | Body substrate awareness | Senses weight damage & localizes corrupted layers |
 | [3. Meta-Interoception](https://haidar167.github.io/meta-interoception/) | Metacognitive monitoring | Monitors the calibration of its own self-monitoring |
 | [4. Nociception](https://haidar167.github.io/nociception/) | Pain-driven help seeking | Spends limited human supervision budget on likely errors |
-| [5. SOMNIA](https://haidar167.github.io/somnia/) | **Targeted sleep consolidation & The Exchange (v3.0)** | **Dreams targeted examples & consolidates open-web visitor lessons with adversarial defense** |
+| [5. SOMNIA](https://haidar167.github.io/somnia/) | **Targeted sleep consolidation & The Exchange (v3.0 & v3.1)** | **Dreams targeted examples & consolidates open-web visitor lessons with generative second opinion** |
 
 ---
 
@@ -119,7 +128,7 @@ Streaming Data ---> Classifier f_psi ---> 10-Feature Introspective Head ---> Con
                  Conditional VAE <--- Class & Latent Targeting <--- High P(error) Regions
                           |
                           v
-                 Soft Stability Filter (Agreement / 5) ---> Sample-Weighted Loss ---> Sleep Consolidation
+         Generative Second Opinion Voucher (BCE Plausibility) ---> Sample-Weighted Loss ---> Sleep Consolidation
 ```
 
 ### 1. Conditional Generative Dreams (cVAE)
@@ -134,13 +143,12 @@ $$\mathbf{z}_{\text{stats}}(\mathbf{x}) = \left[\mu(\mathbf{h}), \, \sigma(\math
 The introspective MLP head predicts misclassification probability:
 $$\hat{P}(\text{error} \mid \mathbf{x}) = \sigma\!\left(\mathbf{W}_2 \operatorname{ReLU}(\mathbf{W}_1 \mathbf{z}_{\text{stats}}(\mathbf{x}) + \mathbf{b}_1) + b_2\right)$$
 
-### 3. Soft Stability Weighting
-Every dream undergoes $M = 5$ stochastic input perturbations $\tilde{\mathbf{x}}_d^{(m)} = \operatorname{clip}(\mathbf{x}_d + \boldsymbol{\epsilon}_m, 0, 1)$, $\boldsymbol{\epsilon}_m \sim \mathcal{N}(\mathbf{0}, \sigma_\epsilon^2 \mathbf{I})$:
-$$w_i = \frac{1}{M} \sum_{m=1}^M \mathbb{I}\!\left(\hat{y}^{(m)} = \hat{y}_{\text{majority}}\right) \in [0.2, 1.0]$$
-Unstable dreams are not discarded; they simply whisper with reduced loss weight.
+### 3. Generative Second Opinion Vouching
+To resolve confirmation bias without accepting malicious lies, taught memories are evaluated against the cVAE reconstruction energy:
+$$w_i = \begin{cases} 2.0 & \text{if stable reinforcement } (\text{agreement} \ge 4/5 \land \hat{y} = y_{\text{taught}}) \\ 1.0 & \text{if plausible correction } (\text{BCE}(\mathbf{x} \mid y_{\text{taught}}) \le 1.10 \times \min_c \text{BCE}(\mathbf{x} \mid c)) \\ 0.1 & \text{if implausible whisper / adversary liar} \end{cases}$$
 
 ### 4. Gentle Sleep Consolidation Objective
-$$\mathcal{L}_{\text{sleep}} = \mathcal{L}_{\text{CE}}(f_\psi(\mathbf{x}_{\text{real}}), y_{\text{real}}) + \lambda_{\text{mix}} \cdot \frac{\sum_i w_i \mathcal{L}_{\text{CE}}(f_\psi(\mathbf{x}_{\text{dream}, i}), \hat{y}_{\text{majority}, i})}{\sum_i w_i}, \quad \lambda_{\text{mix}} = 0.05, \, \eta = 10^{-4}$$
+$$\mathcal{L}_{\text{sleep}} = \mathcal{L}_{\text{CE}}(f_\psi(\mathbf{x}_{\text{real}}), y_{\text{real}}) + \lambda_{\text{mix}} \cdot \frac{\sum_i w_i \mathcal{L}_{\text{CE}}(f_\psi(\mathbf{x}_{\text{dream}, i}), \hat{y}_{\text{majority}, i})}{\sum_i w_i} + \frac{\sum_j w_j \mathcal{L}_{\text{CE}}(f_\psi(\mathbf{x}_{\text{taught}, j}), y_{\text{taught}, j})}{\sum_j w_j}$$
 
 ### 5. Calibrated Sleep Policy
 The network triggers an on-demand sleep cycle if and only if all four safeguards hold:
@@ -180,13 +188,13 @@ cd somnia
 # Install dependencies
 pip install -r requirements.txt
 
-# Run v2 Pipeline
-python phase1_v2_cvae.py            # Train conditional VAE & sample grid
-python phase2_v2_stress_head.py     # Stress-train 10-feature introspective MLP
-python phase3_v2_dreamloop.py       # Run sign-flipped 5-cycle self-healing
-python phase4_v2_calibrated_policy.py # Calibrated sleep policy & GIF
+# Run v3.1 The Exchange Digestion Experiment
+python experiment_exchange_v31.py
 
-# Run Full Test Suite (48/48 passing)
+# Run Living Web Specimen Server
+python -m uvicorn specimen.server:app --port 8000
+
+# Run Full Test Suite (59/59 passing)
 pytest -v
 ```
 
@@ -199,6 +207,7 @@ somnia/
   somnia/
     __init__.py          # Package init
     models.py            # ClassifierMLP, VAE, ConditionalVAE, IntrospectiveHead(v1/v2)
+    second_opinion.py    # Generative Second Opinion Voucher (cVAE BCE energy)
     dreamer.py           # v1 Dreamer
     sleep.py             # v1 StabilityFilter, SleepConsolidation
     sleep_v2.py          # v2 SoftStabilityFilter, DreamerV2, SleepConsolidationV2
@@ -206,7 +215,9 @@ somnia/
     data.py              # Fast binary MNIST IDX reader
     utils.py             # Deterministic seeds, git hash, JSON logging
   specimen/
-    organism.py          # Living AI organism state machine
+    organism.py          # Living AI organism state machine with second opinion
+    second_opinion.py    # Direct organism voucher integration
+    storage.py           # SQLite persistent substrate (events, dreams, taught memories)
     server.py            # FastAPI + WebSockets server
     static/
       index.html         # Dark lab console UI
@@ -217,7 +228,15 @@ somnia/
     test_dreamer.py      # 10 tests (Latent dreams, PCA, Top-K selection)
     test_sleep.py        #  9 tests (Filters, Consolidation, Hard subset)
     test_specimen.py     #  9 tests (Organism state, feed, reveal, mood, API)
+    test_second_opinion.py # 2 tests (Plausibility rescue & liar suppression)
+    test_taught_memories.py # 2 tests (Persistence & replay)
+    test_visitor_memory.py  # 1 test (Anonymous visitor tracking)
+    test_consolidation_exchange.py # 2 tests (Exchange sleep cycle)
+    test_phase0_polish.py # 3 tests (Buffer stability)
+    test_persistence.py  # 1 test (State restoration across restarts)
   figures/
+    exchange_v31_curve.png # The Exchange v3.1 Digestion curve
+    exchange_curve.png     # v3.0 immune defense curve
     somnia_v2.gif        # Lead class-conditioned dream film
     v2_introspective_roc.png
     v2_dream_curve.png
@@ -226,7 +245,8 @@ somnia/
     v2_recon_comparison.png
     somnia_dreams.gif    # v1 dream film
   results/
-    phase1.json .. phase4.json       # v1 benchmark data
+    exchange_v31.json    # v3.1 benchmark data (N=1000 conscience, 95% CIs)
+    exchange.json        # v3.0 benchmark data
     v2_phase1.json .. v2_phase4.json # v2 benchmark data
   README.md
   _config.yml
