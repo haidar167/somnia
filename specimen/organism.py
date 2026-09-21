@@ -15,6 +15,7 @@ from somnia.models import (
     ClassifierMLP, ConditionalVAE, IntrospectiveHeadV2, extract_internal_stats_v2
 )
 from somnia.sleep_v2 import SoftStabilityFilter, DreamerV2, SleepConsolidationV2
+from somnia.second_opinion import SecondOpinionVoucher
 from somnia.utils import project_root, set_seed
 from specimen.storage import SpecimenStorage
 
@@ -64,6 +65,7 @@ class SpecimenOrganism:
 
         self.dreamer = DreamerV2(self.classifier, self.cvae, self.intro_head)
         self.stability = SoftStabilityFilter(self.classifier, n_perturbations=5, noise_std=0.05)
+        self.voucher = SecondOpinionVoucher(self.cvae, tolerance_ratio=1.10)
         self.consolidator = SleepConsolidationV2(self.classifier, dream_mix=0.05, lr=1e-4, epochs=2)
 
         # Organism Vitality State (Load from DB if restarting)
@@ -475,24 +477,21 @@ class SpecimenOrganism:
                     t_stats = extract_internal_stats_v2(t_h, t_logits)
                     taught_p_before = float(self.intro_head(t_stats).mean().item())
 
-                # SoftStabilityFilter on taught samples (5 perturbation votes)
-                t_votes = []
-                gen = torch.Generator().manual_seed(42)
-                for _ in range(5):
-                    noise = torch.randn_like(taught_x, generator=gen) * 0.05
-                    pert = (taught_x + noise).clamp(0, 1)
-                    with torch.no_grad():
-                        t_votes.append(self.classifier(pert)[0].argmax(dim=1))
-                votes_stack = torch.stack(t_votes, dim=1)  # (N, 5)
+                # Evaluate taught memories with SecondOpinionVoucher (v3.1)
+                voucher_res = self.voucher.evaluate_taught_batch(
+                    taught_x, taught_y, self.classifier, n_perturbations=5, noise_std=0.05, seed=42
+                )
+                taught_weights = voucher_res["weights"]
+                verdicts = voucher_res["verdicts"]
 
-                taught_weights = torch.zeros(len(t_list))
-                for i in range(len(t_list)):
-                    agree = (votes_stack[i] == taught_y[i]).float().mean().item()
-                    if agree >= 0.4:
-                        taught_weights[i] = 2.0
-                    else:
-                        taught_weights[i] = 0.1
-                        self.log_event("a visitor taught me something unstable — I dream on it lightly.", "warning")
+                for i, v in enumerate(verdicts):
+                    w_val = float(taught_weights[i].item())
+                    if v == "plausible_correction":
+                        self.log_event(f"taught: plausible correction (w={w_val:.1f}) -- second opinion vouches.", "info")
+                    elif v == "implausible_whisper":
+                        self.log_event(f"taught: implausible (w={w_val:.1f}) -- unstable whisper.", "warning")
+                    elif v == "stable_reinforcement":
+                        self.log_event(f"taught: stable reinforcement (w={w_val:.1f}).", "info")
 
             self.consolidator.sleep_cycle(
                 real_x, real_y, raw_dreams, pseudo_y, weights,
