@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SPECIMEN #001 — Living AI Organism</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div class="console-wrapper">
+    <!-- Header -->
+    <header class="console-header">
+      <div class="header-left">
+        <div class="pulse-dot"></div>
+        <span class="organism-id">SPECIMEN #001</span>
+        <span class="status-tag">STATUS: <span id="vital-status">ALIVE</span></span>
+      </div>
+      <div class="header-center">
+        <span>UPTIME: <span id="uptime-display" class="mono-glow">00:00:00</span></span>
+        <span class="separator">|</span>
+        <span>SLEEP CYCLES: <span id="sleep-count-display" class="mono-glow">0</span></span>
+        <span class="separator">|</span>
+        <span>TOTAL FEEDS: <span id="feed-count-display" class="mono-glow">0</span></span>
+      </div>
+      <div class="header-right">
+        <span>OBSERVERS: <span id="visitor-count-display" class="mono-glow">1</span></span>
+        <span class="connection-pill" id="ws-pill">CONNECTING</span>
+      </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="console-grid">
+      <!-- Left: Sensory Chamber -->
+      <section class="panel chamber-panel">
+        <div class="panel-header">
+          <h2>01 // SENSORY CHAMBER</h2>
+          <span class="sub-label">FEED THE ORGANISM</span>
+        </div>
+        <div class="panel-body">
+          <div class="canvas-container">
+            <canvas id="draw-canvas" width="280" height="280"></canvas>
+            <div class="canvas-overlay-guide">DRAW 28x28 DIGIT</div>
+          </div>
+          <div class="canvas-controls">
+            <button id="btn-clear" class="btn btn-secondary">CLEAR</button>
+            <button id="btn-feed" class="btn btn-primary">FEED ORGANISM</button>
+          </div>
+
+          <div class="presets-block">
+            <span class="field-title">SYNTHETIC INJECTION PRESETS:</span>
+            <div class="preset-buttons">
+              <button class="btn btn-preset" onclick="loadPreset('clean_3')">CLEAN '3'</button>
+              <button class="btn btn-preset" onclick="loadPreset('ambiguous_8')">AMBIGUOUS '8'</button>
+              <button class="btn btn-preset" onclick="loadPreset('noise')">NOISE</button>
+              <button class="btn btn-preset" onclick="loadPreset('blank')">BLANK</button>
+            </div>
+          </div>
+
+          <!-- Reveal Box -->
+          <div class="reveal-box">
+            <span class="field-title">REVEAL GROUND TRUTH:</span>
+            <div class="reveal-controls">
+              <input type="number" id="reveal-input" min="0" max="9" placeholder="0-9">
+              <button id="btn-reveal" class="btn btn-warning">CONFIRM TRUTH</button>
+            </div>
+          </div>
+
+          <!-- Disagreement Alert Banner -->
+          <div id="disagreement-banner" class="disagreement-banner hidden">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-content">
+              <span class="alert-title">NEURAL DISAGREEMENT DETECTED</span>
+              <p id="disagreement-text">The network's gut feeling and its mouth disagree.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Center: Vitals & Brainwaves -->
+      <section class="panel vitals-panel">
+        <div class="panel-header">
+          <h2>02 // SOMATOSENSORY VITALS</h2>
+          <span class="sub-label">INTERNAL MONITORS</span>
+        </div>
+        <div class="panel-body">
+          <!-- Big Vitals Row -->
+          <div class="vitals-row">
+            <!-- P(error) Introspection -->
+            <div class="vital-card">
+              <span class="vital-label">INTROSPECTIVE P(ERROR)</span>
+              <div class="vital-value-group">
+                <span id="p-error-val" class="vital-value mono-glow">0.03</span>
+                <span id="mood-badge" class="mood-badge mood-calm">CALM</span>
+              </div>
+              <div class="vital-progress-bar">
+                <div id="p-error-bar" class="bar-fill" style="width: 3%;"></div>
+              </div>
+              <div class="threshold-legend">
+                <span>&lt;0.10 Calm</span>
+                <span>0.10-0.25 Uneasy</span>
+                <span>0.25-0.50 Alarmed</span>
+                <span>&gt;0.50 Pain</span>
+              </div>
+            </div>
+
+            <!-- Mouth Channel (Softmax) -->
+            <div class="vital-card">
+              <span class="vital-label">MOUTH PREDICTION</span>
+              <div class="vital-value-group">
+                <span id="prediction-val" class="vital-value mono-glow">--</span>
+                <span id="confidence-badge" class="confidence-badge">0.0% CONF</span>
+              </div>
+              <div class="vital-subtext">Softmax Output Channel</div>
+            </div>
+          </div>
+
+          <!-- Brainwaves Live Stream -->
+          <div class="brainwaves-section">
+            <div class="section-sub-header">
+              <span>REAL-TIME NEURAL ACTIVATION OSCILLATIONS (BRAINWAVES)</span>
+              <div class="chart-legend">
+                <span class="leg-item leg-p-err">● P(error)</span>
+                <span class="leg-item leg-conf">● Confidence</span>
+                <span class="leg-item leg-act">● Mean Act</span>
+                <span class="leg-item leg-margin">● Logit Margin</span>
+              </div>
+            </div>
+            <canvas id="brainwaves-canvas" width="480" height="160"></canvas>
+          </div>
+
+          <!-- Feature Breakdown -->
+          <div class="stats-table">
+            <div class="stat-item"><span>ALIVE NEURONS:</span> <span id="stat-alive" class="mono">--</span></div>
+            <div class="stat-item"><span>TOP 10% MEAN:</span> <span id="stat-top10" class="mono">--</span></div>
+            <div class="stat-item"><span>ACTIVATION SPREAD:</span> <span id="stat-std" class="mono">--</span></div>
+            <div class="stat-item"><span>LOGIT MARGIN:</span> <span id="stat-margin" class="mono">--</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Subconscious Dreams & Logs -->
+      <section class="panel dreams-panel">
+        <div class="panel-header">
+          <h2>03 // SUBCONSCIOUS CHAMBER</h2>
+          <button id="btn-sleep" class="btn btn-sleep">TRIGGER SLEEP</button>
+        </div>
+        <div class="panel-body">
+          <span class="field-title">CONSOLIDATED DREAM MEMORIES:</span>
+          <div id="dream-feed" class="dream-grid">
+            <!-- Dream items dynamically populated -->
+          </div>
+
+          <span class="field-title" style="margin-top: 15px;">EVENT LOG (TERMINAL):</span>
+          <div id="terminal-log" class="terminal-container">
+            <!-- Events dynamically populated -->
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="console-footer">
+      <span>THE SPECIMEN v2.0 // Neural Self-Awareness Continuum (Project 5)</span>
+      <span>Engine: PyTorch CPU • cVAE Generative Imagination • 10-Feature Introspective Head</span>
+      <a href="https://github.com/haidar167/somnia" target="_blank">GITHUB REPO</a>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

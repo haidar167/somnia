@@ -10,6 +10,28 @@
 
 ---
 
+## 🧠 THE SPECIMEN: A Living AI Organism on the Web
+
+<p align="center">
+  <img src="figures/specimen_disagreement.png" alt="The Disagreement Moment" width="700"/>
+</p>
+
+The biological culmination of this entire series is **THE SPECIMEN** — a standalone, real-time web application where visitors can observe the living artificial organism, feed it custom drawn digits, watch its internal brainwaves oscillate, witness the dramatic moment when **its mouth and gut disagree**, and watch it enter dream consolidation.
+
+### Key Capabilities:
+1. **Real-Time Somatosensory Telemetry**: Live WebSocket broadcast of 10 internal activation statistics and brainwave channels.
+2. **The Disagreement Moment**: When softmax confidence is high but introspective $P(\text{error})$ sounds the alarm, the console highlights the internal cognitive dissonance.
+3. **Interactive Confession & Truth Reveal**: Feed ambiguous samples, reveal the ground truth, and watch the organism confess its internal doubt.
+4. **Subconscious Dream Feed**: Watch targeted dreams generated and consolidated live.
+
+```bash
+# Run The Specimen Web Organism locally
+python -m uvicorn specimen.server:app --reload --port 8000
+# Open http://localhost:8000
+```
+
+---
+
 ## 🌟 The Redemption Arc: v1 vs v2
 
 SOMNIA v1 honestly reported the limits of naive dreaming. SOMNIA v2 engineered the fixes and **flipped the sign**:
