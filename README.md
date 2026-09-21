@@ -145,7 +145,7 @@ python phase2_v2_stress_head.py     # Stress-train 10-feature introspective MLP
 python phase3_v2_dreamloop.py       # Run sign-flipped 5-cycle self-healing
 python phase4_v2_calibrated_policy.py # Calibrated sleep policy & GIF
 
-# Run Full Test Suite (39/39 passing)
+# Run Full Test Suite (48/48 passing)
 pytest -v
 ```
 
@@ -164,10 +164,18 @@ somnia/
     stress.py            # Perturbation engine (Gaussian, rotation, permutation)
     data.py              # Fast binary MNIST IDX reader
     utils.py             # Deterministic seeds, git hash, JSON logging
+  specimen/
+    organism.py          # Living AI organism state machine
+    server.py            # FastAPI + WebSockets server
+    static/
+      index.html         # Dark lab console UI
+      style.css          # Monospace cyberpunk styling
+      app.js             # Canvas drawing + WS brainwaves chart
   tests/
     test_models.py       # 20 tests (Classifier, VAE, cVAE, Stats v1/v2, Heads v1/v2)
     test_dreamer.py      # 10 tests (Latent dreams, PCA, Top-K selection)
     test_sleep.py        #  9 tests (Filters, Consolidation, Hard subset)
+    test_specimen.py     #  9 tests (Organism state, feed, reveal, mood, API)
   figures/
     somnia_v2.gif        # Lead class-conditioned dream film
     v2_introspective_roc.png
