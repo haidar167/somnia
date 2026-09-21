@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-09-21T22:22:36.126312",
+  "seed": 0,
+  "git_hash": "d3a5f96",
+  "phase": "v2-2",
+  "clean_test_auc": 0.9137243001850627,
+  "stress_test_auc": 0.9275857791643354,
+  "v1_clean_auc": 0.5879,
+  "clean_target_met": true,
+  "stress_target_met": true,
+  "stress_calibration_error_rate": 0.36660000681877136,
+  "figures": [
+    "figures/v2_introspective_roc.png"
+  ]
+}
