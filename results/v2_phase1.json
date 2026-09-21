@@ -1,0 +1,37 @@
+{
+  "timestamp": "2026-09-21T22:15:32.254450",
+  "seed": 0,
+  "git_hash": "232a678",
+  "phase": "v2-1",
+  "cvae_final_loss": 110.70145854048296,
+  "v1_vae_loss": 113.94,
+  "improvement": 3.2385414595170374,
+  "target_met": false,
+  "cvae_history": [
+    {
+      "epoch": 1,
+      "loss_per_sample": 178.22452906605113
+    },
+    {
+      "epoch": 2,
+      "loss_per_sample": 129.52212718394887
+    },
+    {
+      "epoch": 3,
+      "loss_per_sample": 118.7929989346591
+    },
+    {
+      "epoch": 4,
+      "loss_per_sample": 113.58587572798295
+    },
+    {
+      "epoch": 5,
+      "loss_per_sample": 110.70145854048296
+    }
+  ],
+  "latent_dim": 32,
+  "figures": [
+    "figures/v2_cvae_samples.png",
+    "figures/v2_recon_comparison.png"
+  ]
+}
