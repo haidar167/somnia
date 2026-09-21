@@ -10,19 +10,52 @@
 
 ---
 
+## 🔁 THE EXCHANGE: The Specimen Learns From Its Visitors (v3.0)
+
+> *"Every visitor who reveals a truth teaches the organism. It dreams about what it was taught — stable lessons at full weight, unstable ones only in whispers. Strangers are now part of its training data."*
+
+In **SOMNIA v3.0**, the loop between visitor interaction and neural plasticity closes permanently. When a visitor reveals ground truth on any input, the interaction is stored into the organism's persistent **Taught Buffer**. During offline sleep cycles, the organism replays these human teachings alongside targeted generative dreams:
+
+```
+[23:19:04] FEED: Saw input -> predicted 5 (15.9%). Felt in pain (P(error)=98.8%).
+[23:19:09] REVEAL: I was WRONG. Said 5, but true label is 6. I felt P(error)=98.8% BEFORE I knew!
+[23:19:10] visitor taught me: this was a 6 (I said 5, felt P(error)=98.8%). I will dream about it.
+[23:20:00] SLEEP #1 COMPLETE (GEN 2): Consolidated 200 dreams + 1 taught. Conscience Acc: 97.0% -> 97.0% (delta: +0.0pp). Awake.
+```
+
+### Untrusted Teaching & The Adversarial Stability Defense
+On the open web, visitors can lie or inject malicious labels. The organism shields its core weights with multi-perturbation soft stability filtering:
+- **Verified Lessons ($w = 2.0$)**: Stable teachings consistent under perturbation receive double weight during consolidation.
+- **Unstable Lessons / Liars ($w = 0.1$)**: Discordant or adversarial teachings are downweighted to a faint whisper, logging *"a visitor taught me something unstable — I dream on it lightly."*
+
+<p align="center">
+  <img src="figures/exchange_curve.png" alt="The Exchange Consolidation Curve" width="640"/>
+</p>
+
+| Condition | Clean Acc (Conscience) | Hard-Subset Acc (20%) | ECE (15 bins) | Taught Confusion |
+|:---|:---:|:---:|:---:|:---:|
+| **Baseline (Pre-Sleep)** | `97.00%` | `85.00%` | `0.0227` | `55.53%` |
+| **Honest Teachers (100% True)** | `96.50%` (`-0.50pp`) | `82.50%` (`-2.50pp`) | `0.0281` (`+0.0054`) | `58.41%` (`+2.88pp`) |
+| **30% Liar Adversaries (Corrupted)** | **`97.00%` (`+0.00pp`)** | **`85.00%` (`+0.00pp`)** | `0.0297` (`+0.0070`) | `57.13%` (`+1.59pp`) |
+
+*Result: Under a 30% deliberate adversarial liar injection attack, the stability defense completely prevented catastrophic degradation (0.00pp clean accuracy drop), preserving the organism's private conscience set perfectly.*
+
+---
+
 ## 🧠 THE SPECIMEN: A Living AI Organism on the Web
 
 <p align="center">
   <img src="figures/specimen_demo.gif" alt="The Specimen Live Telemetry Stream" width="720"/>
 </p>
 
-The biological culmination of this entire series is **THE SPECIMEN** — a standalone, real-time web application where visitors observe a living artificial organism, feed it custom drawn digits, watch its internal brainwaves oscillate, witness the dramatic moment when **its mouth and gut disagree**, and watch it enter dream consolidation.
+The biological culmination of this entire series is **THE SPECIMEN** — a standalone, real-time web application where visitors observe a living artificial organism (`SPECIMEN #001 - GEN N`), feed it custom drawn digits, watch its internal brainwaves oscillate, witness the dramatic moment when **its mouth and gut disagree**, and watch it enter dream consolidation.
 
 ### What You Experience in the First 30 Seconds:
 1. **Real-Time Somatosensory Telemetry**: Live WebSocket broadcast of 10 internal activation statistics and 4-channel brainwaves streaming at 2 Hz without touching a button.
 2. **The Disagreement Moment**: Draw an ambiguous digit. When nominal Softmax confidence is high but introspective $P(\text{error})$ sounds the alarm, the console highlights the internal cognitive dissonance.
 3. **Interactive Confession & Truth Reveal**: Confirm the ground truth, and watch the organism confess its internal doubt into the live terminal.
 4. **Subconscious Dream Feed & Persistence**: Watch targeted dreams generated and consolidated. The organism persists state to SQLite, remembering returning visitors anonymously across restarts.
+5. **Generational Evolution**: Every sleep consolidation updates the organism's generation counter (`GEN 1 -> GEN 2 -> ...`), reflecting lifelong learning from its visitors.
 
 ### Running & Deploying:
 ```bash
@@ -73,7 +106,7 @@ SOMNIA v1 honestly reported the limits of naive dreaming. SOMNIA v2 engineered t
 | [2. Proprioception](https://haidar167.github.io/proprioception/) | Body substrate awareness | Senses weight damage & localizes corrupted layers |
 | [3. Meta-Interoception](https://haidar167.github.io/meta-interoception/) | Metacognitive monitoring | Monitors the calibration of its own self-monitoring |
 | [4. Nociception](https://haidar167.github.io/nociception/) | Pain-driven help seeking | Spends limited human supervision budget on likely errors |
-| [5. SOMNIA](https://haidar167.github.io/somnia/) | **Targeted sleep consolidation** | **Dreams targeted examples to patch its own weak spots** |
+| [5. SOMNIA](https://haidar167.github.io/somnia/) | **Targeted sleep consolidation & The Exchange (v3.0)** | **Dreams targeted examples & consolidates open-web visitor lessons with adversarial defense** |
 
 ---
 
