@@ -74,6 +74,11 @@ async def start_background_broadcast():
     asyncio.create_task(periodic_broadcast())
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok", "specimen": "alive", "generation": organism.generation}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
     index_path = STATIC_DIR / "index.html"
